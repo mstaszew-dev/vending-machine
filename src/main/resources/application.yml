@@ -1,0 +1,14 @@
+server:
+  port: 8080
+
+machine:
+  # units one slot can hold
+  capacity-per-slot: 10
+  # filled at startup, so the machine is usable without a refill first
+  initial-stock-per-slot: 3
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
