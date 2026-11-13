@@ -1,0 +1,12 @@
+import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vitest/config'
+
+// Unit and component tests run in jsdom against the same React transform as the app.
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+  },
+})

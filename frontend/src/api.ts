@@ -1,0 +1,81 @@
+import { ApiError } from './errors'
+import type { MachineState, PurchaseResult, ReturnedCredit } from './types'
+import {
+  parseMachineState,
+  parseProblemDetails,
+  parsePurchaseResult,
+  parseReturnedCredit,
+  ShapeError,
+} from './validation'
+
+async function request<T>(
+  path: string,
+  parse: (value: unknown) => T,
+  init?: RequestInit,
+): Promise<T> {
+  const response = await fetch(`/api/machine${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...init,
+  })
+
+  if (!response.ok) {
+    const problem = parseProblemDetails(await response.json().catch(() => null))
+    throw new ApiError(
+      problem.detail ?? `Request failed with status ${response.status}`,
+      response.status,
+      problem.code,
+    )
+  }
+
+  try {
+    return parse(await response.json())
+  } catch (error) {
+    if (error instanceof ShapeError) {
+      throw new ApiError(`Unexpected response from the machine: ${error.message}`, 500)
+    }
+    throw error
+  }
+}
+
+export function getMachine(): Promise<MachineState> {
+  return request('', parseMachineState)
+}
+
+export function insertCredit(amount: number): Promise<MachineState> {
+  return request('/credit', parseMachineState, {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  })
+}
+
+export function returnCredit(): Promise<ReturnedCredit> {
+  return request('/credit/return', parseReturnedCredit, { method: 'POST' })
+}
+
+export function purchase(
+  items: { productId: number; quantity: number }[],
+): Promise<PurchaseResult> {
+  return request('/purchase', parsePurchaseResult, {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  })
+}
+
+export function refill(
+  items: { productId: number; quantity: number }[],
+): Promise<MachineState> {
+  return request('/refill', parseMachineState, {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  })
+}
+
+export function describeError(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.message
+  }
+  if (error instanceof TypeError) {
+    return 'Cannot reach the machine. Is the backend running on port 8080?'
+  }
+  return error instanceof Error ? error.message : 'Something went wrong'
+}
