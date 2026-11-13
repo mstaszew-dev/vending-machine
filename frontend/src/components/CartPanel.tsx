@@ -6,7 +6,7 @@ import {
   missingCents,
   type CartLine,
 } from '../cart'
-import { formatCents, formatEuro } from '../money'
+import { formatCents, formatEuro, toCents } from '../money'
 import type { Product } from '../types'
 
 interface CartPanelProps {
@@ -90,9 +90,7 @@ export function CartPanel({
                 </button>
               </div>
               <span className="cart-line__total">
-                {formatCents(
-                  Math.round(product.price * 100) * quantity,
-                )}
+                {formatCents(toCents(product.price) * quantity)}
               </span>
             </li>
           ))}

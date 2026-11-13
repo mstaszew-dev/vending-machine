@@ -14,11 +14,29 @@ interface RefillItem {
 }
 
 export function StaffView({ machine, busy, onRefill }: StaffViewProps) {
-  const [amounts, setAmounts] = useState<Record<number, number>>({})
+  // the raw input is kept as a string so typing feels normal, and only the value that is
+  // actually sent is clamped to the free space of the slot
+  const [amounts, setAmounts] = useState<Record<number, string>>({})
 
   const missingUnits = (product: Product) => product.capacity - product.stock
+
+  /** Keeps the typed amount inside 1..missing: the backend would reject anything else. */
+  const clampRefill = (product: Product, value: number) => {
+    const missing = missingUnits(product)
+    if (missing === 0) {
+      return 0
+    }
+    if (!Number.isFinite(value)) {
+      return 1
+    }
+    return Math.min(missing, Math.max(1, Math.trunc(value)))
+  }
+
+  const rawAmountFor = (product: Product) =>
+    amounts[product.id] ?? String(Math.max(1, missingUnits(product)))
+
   const amountFor = (product: Product) =>
-    amounts[product.id] ?? Math.max(1, missingUnits(product))
+    clampRefill(product, Number(rawAmountFor(product)))
 
   const refillOne = (product: Product) => {
     const quantity = amountFor(product)
@@ -119,11 +137,11 @@ export function StaffView({ machine, busy, onRefill }: StaffViewProps) {
                       min={1}
                       max={Math.max(1, missingUnits(product))}
                       aria-label={`Units of ${product.name} to add`}
-                      value={amountFor(product)}
+                      value={rawAmountFor(product)}
                       onChange={(event) =>
                         setAmounts((current) => ({
                           ...current,
-                          [product.id]: Number(event.target.value),
+                          [product.id]: event.target.value,
                         }))
                       }
                     />

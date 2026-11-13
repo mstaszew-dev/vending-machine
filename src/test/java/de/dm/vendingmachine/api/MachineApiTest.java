@@ -69,6 +69,7 @@ class MachineApiTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("INVALID_COIN"))
+                .andExpect(jsonPath("$.instance").value("/api/machine/credit"))
                 .andExpect(jsonPath("$.detail").exists());
     }
 
@@ -120,6 +121,28 @@ class MachineApiTest {
         mockMvc.perform(get("/api/machine"))
                 .andExpect(content().json("""
                         {"credit": 2.00}
+                        """))
+                .andExpect(jsonPath("$.products[0].stock").value(3))
+                .andExpect(jsonPath("$.products[0].unitsSold").value(0));
+    }
+
+    @Test
+    @DisplayName("absurd quantities are rejected instead of overflowing stock or money")
+    void absurdQuantitiesAreRejectedWithoutTouchingTheMachine() throws Exception {
+        insertCredit("2.00");
+
+        mockMvc.perform(post("/api/machine/purchase")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"items": [{"productId": 1, "quantity": 2000000000},
+                                           {"productId": 1, "quantity": 2000000000}]}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_QUANTITY"));
+
+        mockMvc.perform(get("/api/machine"))
+                .andExpect(content().json("""
+                        {"credit": 2.00, "totalRevenue": 0.00}
                         """))
                 .andExpect(jsonPath("$.products[0].stock").value(3))
                 .andExpect(jsonPath("$.products[0].unitsSold").value(0));

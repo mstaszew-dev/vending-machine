@@ -40,9 +40,9 @@ the image runs the jar as a non-root user on a slim JRE.
 ### Tests and checks
 
 ```bash
-./mvnw test                 # 27 backend tests: domain rules + HTTP integration
+./mvnw test                 # 30 backend tests: domain rules + HTTP integration + concurrency
 cd frontend
-npm test                    # 14 frontend tests: cart math + views
+npm test                    # 21 frontend tests: cart math, validation, views
 npm run typecheck           # tsc -b, strict
 npm run lint                # oxlint
 npm run build               # production bundle
@@ -58,7 +58,7 @@ npm run build               # production bundle
 | Only buy as many as are in the machine | Quantity is clamped to stock in the cart, and the backend rejects the whole cart with `409 INSUFFICIENT_STOCK` |
 | API used by the frontend | `/api/machine/*`, see the table below |
 | At least one view | Single page with a Customer and a Staff view |
-| Functionality covered by tests | 27 backend tests (14 domain, 12 HTTP, 1 context) and 14 frontend tests |
+| Functionality covered by tests | 30 backend tests (16 domain, 13 HTTP, 1 context) and 21 frontend tests (3 files) |
 
 ## API
 

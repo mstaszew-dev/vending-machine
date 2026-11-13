@@ -29,7 +29,8 @@ public enum Coin {
 
     /**
      * @return the coin matching the given amount, or empty for any amount that is not
-     *         a valid coin (e.g. 0.03, 5.00 or 0.5 written with a different scale).
+     *         a valid coin (e.g. 0.03 or 5.00). The comparison ignores the scale, so
+     *         {@code 0.5} and {@code 0.50} both match the 50 cent coin.
      */
     public static Optional<Coin> of(BigDecimal amount) {
         if (amount == null) {

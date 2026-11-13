@@ -157,6 +157,24 @@ describe('StaffView', () => {
     expect(onRefill).toHaveBeenCalledWith([{ productId: 1, quantity: 4 }])
   })
 
+  it('clamps a typed refill amount to the free space in the slot', async () => {
+    const user = userEvent.setup()
+    const onRefill = vi.fn()
+    const machine = makeMachineState({
+      products: [
+        makeProduct({ id: 1, name: 'Balea shower gel', price: 0.55, stock: 3 }),
+      ],
+    })
+
+    render(<StaffView machine={machine} busy={false} onRefill={onRefill} />)
+    const input = screen.getByLabelText('Units of Balea shower gel to add')
+    await user.clear(input)
+    await user.type(input, '99')
+    await user.click(screen.getByRole('button', { name: 'Refill' }))
+
+    expect(onRefill).toHaveBeenCalledWith([{ productId: 1, quantity: 7 }])
+  })
+
   it('shows revenue and units sold', () => {
     const machine = makeMachineState({
       totalRevenue: 5.5,

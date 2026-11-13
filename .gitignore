@@ -32,3 +32,8 @@ build/
 
 ### macOS ###
 .DS_Store
+
+### Node / Vite ###
+node_modules/
+frontend/dist/
+*.tsbuildinfo

@@ -95,6 +95,13 @@ button {
   font-size: 0.9rem;
 }
 
+.app__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .tabs {
   display: flex;
   gap: 6px;

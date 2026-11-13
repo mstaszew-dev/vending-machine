@@ -130,7 +130,7 @@ public class VendingMachine {
 
         BigDecimal change = credit.subtract(total);
         credit = ZERO;
-        return new PurchaseResult(total, change, items, credit);
+        return new PurchaseResult(total, change, items, ZERO);
     }
 
     /** Staff action: tops up slots. Never exceeds the configured slot capacity. */
@@ -140,7 +140,7 @@ public class VendingMachine {
         for (Map.Entry<Long, Integer> entry : requested.entrySet()) {
             Product product = product(entry.getKey());
             int current = stock.get(product.id());
-            if (current + entry.getValue() > capacityPerSlot) {
+            if (entry.getValue() > capacityPerSlot - current) {
                 throw new MachineException(
                         MachineError.SLOT_CAPACITY_EXCEEDED,
                         "Slot of '%s' holds at most %d unit(s), %d already in stock, %d requested"
@@ -166,10 +166,27 @@ public class VendingMachine {
                         MachineError.INVALID_QUANTITY,
                         "Quantity for product %d must be at least 1".formatted(line.productId()));
             }
+            if (line.quantity() > capacityPerSlot) {
+                // A slot can never hold more than its capacity, so a larger single line is
+                // never buyable or stockable. Rejecting it here also keeps the merge below
+                // free of integer overflow.
+                throw new MachineException(
+                        MachineError.INVALID_QUANTITY,
+                        "At most %d unit(s) per product can be handled, %d requested"
+                                .formatted(capacityPerSlot, line.quantity()));
+            }
             Product product = product(line.productId());
-            requested.merge(product.id(), line.quantity(), Integer::sum);
+            requested.merge(product.id(), line.quantity(), VendingMachine::addQuantities);
         }
         return requested;
+    }
+
+    private static int addQuantities(int left, int right) {
+        try {
+            return Math.addExact(left, right);
+        } catch (ArithmeticException overflow) {
+            throw new MachineException(MachineError.INVALID_QUANTITY, "Quantity is too large");
+        }
     }
 
     private Product product(long productId) {

@@ -22,10 +22,15 @@ function App() {
   }, [])
 
   async function refresh() {
+    setBusy(true)
+    setProblem(null)
     try {
       setMachine(await api.getMachine())
+      setNotice(null)
     } catch (error) {
       setProblem(describeError(error))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -93,24 +98,34 @@ function App() {
           </div>
         </div>
 
-        <nav className="tabs" aria-label="Views">
+        <div className="app__actions">
+          <nav className="tabs" aria-label="Views">
+            <button
+              type="button"
+              className={`tab${tab === 'customer' ? ' tab--active' : ''}`}
+              aria-current={tab === 'customer' ? 'page' : undefined}
+              onClick={() => setTab('customer')}
+            >
+              Customer
+            </button>
+            <button
+              type="button"
+              className={`tab${tab === 'staff' ? ' tab--active' : ''}`}
+              aria-current={tab === 'staff' ? 'page' : undefined}
+              onClick={() => setTab('staff')}
+            >
+              Staff
+            </button>
+          </nav>
           <button
             type="button"
-            className={`tab${tab === 'customer' ? ' tab--active' : ''}`}
-            aria-selected={tab === 'customer'}
-            onClick={() => setTab('customer')}
+            className="button button--ghost"
+            disabled={busy}
+            onClick={() => void refresh()}
           >
-            Customer
+            Reload
           </button>
-          <button
-            type="button"
-            className={`tab${tab === 'staff' ? ' tab--active' : ''}`}
-            aria-selected={tab === 'staff'}
-            onClick={() => setTab('staff')}
-          >
-            Staff
-          </button>
-        </nav>
+        </div>
       </header>
 
       {problem && (
@@ -132,7 +147,12 @@ function App() {
               The backend answers on port 8080. Start it with{' '}
               <code>./mvnw spring-boot:run</code> and retry.
             </p>
-            <button type="button" className="button button--primary" onClick={refresh}>
+            <button
+              type="button"
+              className="button button--primary"
+              disabled={busy}
+              onClick={() => void refresh()}
+            >
               Retry
             </button>
           </section>

@@ -8,15 +8,30 @@ import {
   ShapeError,
 } from './validation'
 
+const REQUEST_TIMEOUT_MS = 10_000
+
 async function request<T>(
   path: string,
   parse: (value: unknown) => T,
   init?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(`/api/machine${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...init,
-  })
+  let response: Response
+  try {
+    response = await fetch(`/api/machine${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...init,
+      // a vending machine that never answers must not leave the UI busy forever
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new ApiError(
+        `The machine did not answer within ${REQUEST_TIMEOUT_MS / 1000} seconds`,
+        504,
+      )
+    }
+    throw error
+  }
 
   if (!response.ok) {
     const problem = parseProblemDetails(await response.json().catch(() => null))
