@@ -30,11 +30,12 @@ apiClient --> validation : response narrowing
 customer --> pure : cart math
 app --> pure : cart state
 
-apiClient --> controller : HTTPS JSON
+apiClient --> controller : HTTP JSON
 
 controller --> service
 service --> machine
-handler --> controller : : MachineException
+controller ..> handler : throws MachineException
+handler --> controller : ProblemDetail
 config --> machine : builds from
 config --> catalog
 config --> props

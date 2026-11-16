@@ -14,6 +14,7 @@ vi.mock('./api', async (importOriginal) => {
     insertCredit: vi.fn(),
     purchase: vi.fn(),
     returnCredit: vi.fn(),
+    refill: vi.fn(),
     describeError: actual.describeError,
   }
 })
@@ -23,6 +24,7 @@ import * as api from './api'
 const mockedGetMachine = vi.mocked(api.getMachine)
 const mockedInsertCredit = vi.mocked(api.insertCredit)
 const mockedPurchase = vi.mocked(api.purchase)
+const mockedRefill = vi.mocked(api.refill)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -124,6 +126,29 @@ describe('App', () => {
     expect(
       screen.getByText('Nothing picked yet. Choose a product on the left.'),
     ).toBeInTheDocument()
+  })
+
+  it('refills a slot from the staff tab and reports it', async () => {
+    const user = userEvent.setup()
+    const state = makeMachineState()
+    mockedGetMachine.mockResolvedValue(state)
+    const refilled = {
+      ...state,
+      products: state.products.map((product) =>
+        product.id === 1 ? { ...product, stock: product.capacity } : product,
+      ),
+    }
+    mockedRefill.mockResolvedValue(refilled)
+
+    render(<App />)
+    await screen.findByText('Balea shower gel')
+
+    await user.click(screen.getByRole('button', { name: 'Staff' }))
+    const row = screen.getByText('Balea shower gel').closest('tr') as HTMLElement
+    await user.click(within(row).getByRole('button', { name: 'Refill' }))
+
+    expect(await screen.findByText('Machine refilled.')).toBeInTheDocument()
+    expect(mockedRefill).toHaveBeenCalledWith([{ productId: 1, quantity: 8 }])
   })
 
   it('shows the staff statistics when the staff tab is selected', async () => {

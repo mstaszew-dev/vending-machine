@@ -40,13 +40,13 @@ class ProductCatalogTest {
     }
 
     @Test
-    @DisplayName("two lookups return equal master data, so nobody can mutate the catalog in place")
-    void productsAreImmutableValueObjects() {
+    @DisplayName("every lookup returns the same cached master data, not a fresh copy")
+    void lookupsReturnTheSameStableMasterData() {
         Product first = catalog.find(ProductCatalog.SHOWER_GEL).orElseThrow();
         Product second = catalog.find(ProductCatalog.SHOWER_GEL).orElseThrow();
 
-        assertThat(first).isEqualTo(second);
-        assertThat(first.price()).isSameAs(second.price());
+        // the catalog hands out the immutable record itself, so lookups are stable
+        assertThat(second).isSameAs(first);
     }
 
     @Test

@@ -13,7 +13,8 @@ Customer -> ui : insert coins
 ui -> ctrl : POST /api/machine/credit {amount}
 ctrl -> vm : insertCoin(amount)
 vm -> state : credit += coin.value
-vm --> ui : MachineView (credit)
+vm --> ctrl : MachineView (credit)
+ctrl --> ui : 200 MachineView
 
 Customer -> ui : Pay
 ui -> ctrl : POST /api/machine/purchase\n{items: [{productId, quantity}]}
@@ -38,11 +39,13 @@ group validation (nothing is mutated yet)
         vm -> state : totalRevenue += total
         vm -> state : credit -> 0 (change returned)
       end
-      vm --> ui : PurchaseResult\n{total, change, items, remainingCredit: 0.00}
+      vm --> ctrl : PurchaseResult\n{total, change, items, remainingCredit: 0.00}
+      ctrl --> ui : 200 PurchaseResult
       ui -> Customer : green banner\n"Paid X, take your change Y"
       ui -> ctrl : GET /api/machine (refresh)
       ctrl -> vm : view()
-      vm --> ui : MachineView
+      vm --> ctrl : MachineView
+      ctrl --> ui : 200 MachineView
     end
   end
 end

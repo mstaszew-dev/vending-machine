@@ -75,8 +75,9 @@ PlantUML sources live in [`docs/`](docs/), render them with `plantuml docs/*.pum
 ## API
 
 One machine, so there is no machine id in the paths. Every mutating call answers with the
-new state, which means the UI never needs a follow-up request (the purchase response is
-the exception: it returns the receipt, the UI then refreshes the state).
+new state, which means the UI never needs a follow-up request. Two exceptions: purchase
+returns the receipt instead (the UI then fetches the state), and `credit/return` returns
+the refunded amount.
 
 | Method | Path | Body | Result |
 |---|---|---|---|

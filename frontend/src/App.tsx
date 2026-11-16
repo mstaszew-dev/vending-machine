@@ -24,7 +24,27 @@ function App() {
   const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
-    void refresh()
+    // the mount fetch guards against a late response landing after unmount
+    // (React 19 StrictMode mounts the component twice in development)
+    let cancelled = false
+    void (async () => {
+      setBusy(true)
+      setProblem(null)
+      try {
+        const state = await api.getMachine()
+        if (cancelled) return
+        setMachine(state)
+        setNotice(null)
+      } catch (error) {
+        if (cancelled) return
+        setProblem(describeError(error))
+      } finally {
+        if (!cancelled) setBusy(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   async function refresh() {

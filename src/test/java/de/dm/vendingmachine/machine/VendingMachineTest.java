@@ -275,7 +275,7 @@ class VendingMachineTest {
                         }
                     }))
                     .toList();
-            ready.await(5, TimeUnit.SECONDS);
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
             start.countDown();
 
             long successes = 0;

@@ -10,7 +10,8 @@ database "in-memory state" as state
 staff -> ui : open Staff tab
 ui -> ctrl : GET /api/machine
 ctrl -> vm : view()
-vm --> ui : MachineView\n(stock, capacity, unitsSold, revenue)
+vm --> ctrl : MachineView\n(stock, capacity, unitsSold, revenue)
+ctrl --> ui : 200 MachineView
 
 staff -> ui : type amount or "Fill all slots"\n' UI clamps to 1..(capacity - stock)
 ui -> ctrl : POST /api/machine/refill\n{items: [{productId, quantity}]}
@@ -26,7 +27,8 @@ group validation (nothing is mutated yet)
     ui -> staff : red banner, nothing changed
   else every line fits
     vm -> state : stock += quantity
-    vm --> ui : MachineView (new stock)
+    vm --> ctrl : MachineView (new stock)
+    ctrl --> ui : 200 MachineView
     ui -> staff : green banner "Machine refilled."
   end
 end
