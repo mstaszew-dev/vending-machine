@@ -1,0 +1,49 @@
+@startuml sequence-purchase
+title purchase - all or nothing checkout
+
+actor Customer
+participant "App.tsx" as ui
+participant "MachineController" as ctrl
+participant "VendingMachine" as vm
+database "in-memory state" as state
+
+Customer -> ui : + / - on products
+note right of ui : cart.ts clamps every\nquantity to the slot stock.\nThe cart lives client-side.
+Customer -> ui : insert coins
+ui -> ctrl : POST /api/machine/credit {amount}
+ctrl -> vm : insertCoin(amount)
+vm -> state : credit += coin.value
+vm --> ui : MachineView (credit)
+
+Customer -> ui : Pay
+ui -> ctrl : POST /api/machine/purchase\n{items: [{productId, quantity}]}
+
+ctrl -> vm : purchase(lines)
+
+group validation (nothing is mutated yet)
+  vm -> vm : normalise()\n' merge duplicates, reject\n' quantity > capacity
+  vm -> state : stock check per line
+  alt any line exceeds stock
+    vm --x ctrl : MachineException(INSUFFICIENT_STOCK)
+    ctrl --x ui : 409 problem+json {code}
+    ui -> Customer : red banner, cart kept
+  else every line fits
+    vm -> vm : total = sum(price x qty)
+    alt credit < total
+      vm --x ctrl : MachineException(INSUFFICIENT_CREDIT)
+      ctrl --x ui : 409 problem+json {code}
+    else credit covers total
+      group commit
+        vm -> state : stock -= qty, unitsSold += qty
+        vm -> state : totalRevenue += total
+        vm -> state : credit -> 0 (change returned)
+      end
+      vm --> ui : PurchaseResult\n{total, change, items, remainingCredit: 0.00}
+      ui -> Customer : green banner\n"Paid X, take your change Y"
+      ui -> ctrl : GET /api/machine (refresh)
+      ctrl -> vm : view()
+      vm --> ui : MachineView
+    end
+  end
+end
+@enduml

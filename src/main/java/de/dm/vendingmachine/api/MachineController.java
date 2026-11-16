@@ -21,6 +21,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/machine")
 public class MachineController {
 
+    // Request bodies are validated by Bean Validation annotations on the DTO records
+    // (InsertCreditRequest, CartItemRequest, PositionsRequest); the machine still
+    // re-checks every rule, so a caller that skips validation cannot corrupt state.
+
     private final MachineService machine;
 
     public MachineController(MachineService machine) {

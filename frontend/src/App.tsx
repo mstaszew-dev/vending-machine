@@ -1,3 +1,9 @@
+/**
+ * Root component and owner of all UI state: the active tab, the machine state and
+ * the cart. Two tabs share one state document: Customer (buy, insert coins) and
+ * Staff (revenue, refill). Every mutation returns the new state from the backend,
+ * so App is the only place that talks to the API and both views stay dumb.
+ */
 import { useEffect, useState } from 'react'
 import * as api from './api'
 import { describeError } from './api'

@@ -1,3 +1,4 @@
+/** The customer tab: the product shelf plus the cart/coin panel side by side. */
 import { quantityOf, type CartLine } from '../cart'
 import type { MachineState, Product } from '../types'
 import { CartPanel } from './CartPanel'

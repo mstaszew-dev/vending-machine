@@ -1,0 +1,48 @@
+@startuml architecture
+title dm vending machine - component architecture
+
+skinparam componentStyle rectangle
+
+component "Frontend\n(React 19 + TypeScript)" as frontend {
+  component "App.tsx\n(tabs, banners, state)" as app
+  component "CustomerView\n+ CartPanel + ProductCard" as customer
+  component "StaffView\n(stats + refill table)" as staff
+  component "api.ts\n(typed client, 10s timeout)" as apiClient
+  component "validation.ts\n(runtime narrowing)" as validation
+  component "cart.ts / money.ts\n(pure rules, integer cents)" as pure
+}
+
+package "Backend (Java 25 + Spring Boot 4)" {
+  component "MachineController\n/api/machine/**" as controller
+  component "MachineExceptionHandler\nRFC 9457 problem details" as handler
+  component "MachineService\n@Service seam" as service
+  component "VendingMachine\naggregate, synchronized" as machine
+  component "MachineConfig\ncomposition root" as config
+  component "ProductCatalog\n8 fixed products" as catalog
+  component "MachineProperties\nmachine.* config" as props
+}
+
+app --> customer : customer tab
+app --> staff : staff tab
+customer --> apiClient
+staff --> apiClient
+apiClient --> validation : response narrowing
+customer --> pure : cart math
+app --> pure : cart state
+
+apiClient --> controller : HTTPS JSON
+
+controller --> service
+service --> machine
+handler --> controller : : MachineException
+config --> machine : builds from
+config --> catalog
+config --> props
+
+note bottom of machine
+  All mutable state lives here:
+  stock, credit, totalRevenue.
+  In-memory only, one monitor
+  per operation. No database.
+end note
+@enduml

@@ -62,6 +62,24 @@ class VendingMachineTest {
     }
 
     @Test
+    @DisplayName("coins are matched by value, so 0.5 is the same coin as 0.50")
+    void acceptsCoinsWrittenWithADifferentScale() {
+        machine.insertCoin(new BigDecimal("0.5"));
+        machine.insertCoin(new BigDecimal("1"));
+
+        assertThat(machine.view().credit()).isEqualByComparingTo("1.50");
+    }
+
+    @Test
+    void refillMergesDuplicateLinesInOneCall() {
+        machine.refill(List.of(
+                new CartLine(SHOWER_GEL, 2),
+                new CartLine(SHOWER_GEL, 3)));
+
+        assertThat(stock(SHOWER_GEL)).isEqualTo(8);
+    }
+
+    @Test
     void purchaseChargesTheTotalAndPaysBackTheRest() {
         machine.insertCoin(new BigDecimal("2.00"));
 

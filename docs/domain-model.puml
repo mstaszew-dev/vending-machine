@@ -1,0 +1,107 @@
+@startuml domain
+title dm vending machine - domain model
+
+skinparam classAttributeIconSize 0
+
+class VendingMachine {
+  -products: Map<Long, Product>
+  -stock: Map<Long, Integer>
+  -unitsSold: Map<Long, Long>
+  -credit: BigDecimal
+  -totalRevenue: BigDecimal
+  -capacityPerSlot: int
+  +view(): MachineView
+  +insertCoin(BigDecimal): MachineView
+  +returnCredit(): BigDecimal
+  +purchase(List<CartLine>): PurchaseResult
+  +refill(List<CartLine>): MachineView
+  note "Every public method is synchronized:\none customer at a time,\nall-or-nothing checkout." as N1
+}
+
+class Product {
+  id: long
+  name: String
+  group: ProductGroup
+  price: BigDecimal  ' scale 2, immutable
+}
+
+enum ProductGroup {
+  PERSONAL_HYGIENE
+  FACE
+  PHOTO
+  TEXTILE
+  HOUSEHOLD
+}
+
+enum Coin {
+  FIVE_CENTS(0.05)
+  TEN_CENTS(0.10)
+  TWENTY_CENTS(0.20)
+  FIFTY_CENTS(0.50)
+  ONE_EURO(1.00)
+  TWO_EUROS(2.00)
+  +of(BigDecimal): Optional<Coin>
+}
+
+class ProductCatalog {
+  +findAll(): List<Product>
+  +find(long): Optional<Product>
+}
+
+record CartLine {
+  productId: long
+  quantity: int  ' > 0, <= capacity
+}
+
+record MachineView {
+  credit: BigDecimal
+  products: List<ProductView>
+  acceptedCoins: List<BigDecimal>
+  totalRevenue: BigDecimal
+}
+
+record ProductView {
+  id, name, group, price
+  stock: int
+  capacity: int
+  unitsSold: long
+}
+
+record PurchaseResult {
+  total: BigDecimal
+  change: BigDecimal
+  items: List<PurchasedItem>
+  remainingCredit: BigDecimal
+}
+
+record PurchasedItem {
+  productId, name, quantity
+  unitPrice: BigDecimal
+  lineTotal: BigDecimal
+}
+
+enum MachineError {
+  INVALID_COIN
+  INVALID_QUANTITY
+  UNKNOWN_PRODUCT
+  INSUFFICIENT_STOCK
+  INSUFFICIENT_CREDIT
+  SLOT_CAPACITY_EXCEEDED
+}
+
+class MachineException {
+  code: MachineError
+}
+
+VendingMachine o-- "8" Product : stocked with
+VendingMachine ..> CartLine : validates
+VendingMachine ..> Coin : accepts only
+VendingMachine ..> MachineView : reads as
+VendingMachine ..> PurchaseResult : returns
+MachineView o-- ProductView
+PurchaseResult o-- PurchasedItem
+Product --> ProductGroup
+ProductCatalog o-- Product : fixed master data
+MachineException --> MachineError : carries
+VendingMachine ..> MachineException : throws
+@enduml

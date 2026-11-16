@@ -1,0 +1,40 @@
+@startuml sequence-refill
+title refill - staff tops up slots, never above capacity
+
+actor "Staff" as staff
+participant "StaffView" as ui
+participant "MachineController" as ctrl
+participant "VendingMachine" as vm
+database "in-memory state" as state
+
+staff -> ui : open Staff tab
+ui -> ctrl : GET /api/machine
+ctrl -> vm : view()
+vm --> ui : MachineView\n(stock, capacity, unitsSold, revenue)
+
+staff -> ui : type amount or "Fill all slots"\n' UI clamps to 1..(capacity - stock)
+ui -> ctrl : POST /api/machine/refill\n{items: [{productId, quantity}]}
+
+ctrl -> vm : refill(lines)
+
+group validation (nothing is mutated yet)
+  vm -> vm : normalise()
+  vm -> state : current stock per line
+  alt current + requested > capacity
+    vm --x ctrl : MachineException(SLOT_CAPACITY_EXCEEDED)
+    ctrl --x ui : 409 problem+json {code}
+    ui -> staff : red banner, nothing changed
+  else every line fits
+    vm -> state : stock += quantity
+    vm --> ui : MachineView (new stock)
+    ui -> staff : green banner "Machine refilled."
+  end
+end
+
+== afterwards ==
+note over vm, state
+  Refilled units are ordinary stock:
+  customers can buy them, unitsSold
+  stays untouched by refills.
+end note
+@enduml

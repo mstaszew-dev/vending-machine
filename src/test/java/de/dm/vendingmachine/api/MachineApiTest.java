@@ -225,6 +225,38 @@ class MachineApiTest {
     }
 
     @Test
+    void aMalformedRequestBodyIsAnInvalidRequest() throws Exception {
+        mockMvc.perform(post("/api/machine/purchase")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{not json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.instance").value("/api/machine/purchase"));
+    }
+
+    @Test
+    void aNegativeQuantityFailsBeanValidationBeforeTheMachine() throws Exception {
+        mockMvc.perform(post("/api/machine/purchase")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"items": [{"productId": 1, "quantity": -1}]}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void refillingAnUnknownProductIsNotFound() throws Exception {
+        mockMvc.perform(post("/api/machine/refill")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"items": [{"productId": 99, "quantity": 1}]}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("UNKNOWN_PRODUCT"));
+    }
+
+    @Test
     void anEmptyCartIsRejected() throws Exception {
         insertCredit("2.00");
 

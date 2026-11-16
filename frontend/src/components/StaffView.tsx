@@ -1,3 +1,8 @@
+/**
+ * The staff tab: machine statistics and a restock table. Refill amounts are clamped
+ * to the free space of each slot in the UI; the backend still re-checks everything,
+ * so the two layers agree on what a valid refill is.
+ */
 import { useState } from 'react'
 import { formatEuro } from '../money'
 import { GROUP_LABELS, type MachineState, type Product } from '../types'

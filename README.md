@@ -40,13 +40,25 @@ the image runs the jar as a non-root user on a slim JRE.
 ### Tests and checks
 
 ```bash
-./mvnw test                 # 30 backend tests: domain rules + HTTP integration + concurrency
+./mvnw test                 # 40 backend tests: domain, HTTP integration, catalog, concurrency
 cd frontend
-npm test                    # 21 frontend tests: cart math, validation, views
+npm test                    # 29 frontend tests: App flows, cart math, validation, views
 npm run typecheck           # tsc -b, strict
 npm run lint                # oxlint
 npm run build               # production bundle
 ```
+
+## Diagrams
+
+PlantUML sources live in [`docs/`](docs/), render them with `plantuml docs/*.puml`
+(or any PlantUML server):
+
+| Diagram | What it shows |
+|---|---|
+| [`architecture.puml`](docs/architecture.puml) | Components: frontend, controller, service, aggregate, config |
+| [`domain-model.puml`](docs/domain-model.puml) | Domain classes, records, enums and their relations |
+| [`sequence-purchase.puml`](docs/sequence-purchase.puml) | Checkout flow: validation, all-or-nothing commit, error paths |
+| [`sequence-refill.puml`](docs/sequence-refill.puml) | Staff refill flow with slot-capacity check |
 
 ## How the requirements are covered
 
@@ -58,7 +70,7 @@ npm run build               # production bundle
 | Only buy as many as are in the machine | Quantity is clamped to stock in the cart, and the backend rejects the whole cart with `409 INSUFFICIENT_STOCK` |
 | API used by the frontend | `/api/machine/*`, see the table below |
 | At least one view | Single page with a Customer and a Staff view |
-| Functionality covered by tests | 30 backend tests (16 domain, 13 HTTP, 1 context) and 21 frontend tests (3 files) |
+| Functionality covered by tests | 40 backend tests (18 domain, 5 catalog, 16 HTTP, 1 context) and 29 frontend tests (4 files) |
 
 ## API
 
@@ -157,6 +169,7 @@ the class of bug a vending machine must not have.
 ## Project layout
 
 ```
+docs/                          PlantUML diagrams (architecture, domain, purchase/refill flows)
 src/main/java/de/dm/vendingmachine/
   api/        REST controller, request DTOs, problem-detail handler
   catalog/    products, product groups, accepted coins

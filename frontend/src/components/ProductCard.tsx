@@ -1,3 +1,8 @@
+/**
+ * One slot on the shelf: shows the product, its stock level and the +/- controls.
+ * The card itself only renders; all quantity changes are delegated upwards so the
+ * clamping rules in cart.ts stay the single source of truth.
+ */
 import { formatEuro } from '../money'
 import { GROUP_LABELS, type Product } from '../types'
 

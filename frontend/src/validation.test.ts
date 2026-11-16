@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ShapeError, parseMachineState, parseProblemDetails } from './validation'
+import { parseMachineState, parseProblemDetails, parsePurchaseResult, ShapeError } from './validation'
 import { makeMachineState } from './test/fixtures'
 
 describe('parseMachineState', () => {
@@ -31,6 +31,43 @@ describe('parseMachineState', () => {
   it('rejects a response that is not an object at all', () => {
     expect(() => parseMachineState(null)).toThrow(ShapeError)
     expect(() => parseMachineState('nope')).toThrow(ShapeError)
+  })
+})
+
+describe('parsePurchaseResult', () => {
+  it('maps a full purchase receipt', () => {
+    const result = parsePurchaseResult({
+      total: 1.1,
+      change: 0.9,
+      remainingCredit: 0,
+      items: [
+        {
+          productId: 1,
+          name: 'Balea shower gel',
+          quantity: 2,
+          unitPrice: 0.55,
+          lineTotal: 1.1,
+        },
+      ],
+    })
+
+    expect(result.total).toBe(1.1)
+    expect(result.change).toBe(0.9)
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]?.name).toBe('Balea shower gel')
+  })
+
+  it('rejects a receipt with fractional quantity', () => {
+    expect(() =>
+      parsePurchaseResult({
+        total: 1.1,
+        change: 0.9,
+        remainingCredit: 0,
+        items: [
+          { productId: 1, name: 'x', quantity: 1.5, unitPrice: 0.55, lineTotal: 1.1 },
+        ],
+      }),
+    ).toThrow(/not an integer/)
   })
 })
 
