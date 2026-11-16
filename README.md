@@ -42,7 +42,7 @@ the image runs the jar as a non-root user on a slim JRE.
 ```bash
 ./mvnw test                 # 40 backend tests: domain, HTTP integration, catalog, concurrency
 cd frontend
-npm test                    # 29 frontend tests: App flows, cart math, validation, views
+npm test                    # 30 frontend tests: App flows, cart math, validation, views
 npm run typecheck           # tsc -b, strict
 npm run lint                # oxlint
 npm run build               # production bundle
@@ -70,7 +70,7 @@ PlantUML sources live in [`docs/`](docs/), render them with `plantuml docs/*.pum
 | Only buy as many as are in the machine | Quantity is clamped to stock in the cart, and the backend rejects the whole cart with `409 INSUFFICIENT_STOCK` |
 | API used by the frontend | `/api/machine/*`, see the table below |
 | At least one view | Single page with a Customer and a Staff view |
-| Functionality covered by tests | 40 backend tests (18 domain, 5 catalog, 16 HTTP, 1 context) and 29 frontend tests (4 files) |
+| Functionality covered by tests | 40 backend tests (18 domain, 5 catalog, 16 HTTP, 1 context) and 30 frontend tests (4 files) |
 
 ## API
 

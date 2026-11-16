@@ -1,0 +1,337 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{parskip}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+
+% dm brand colors
+\definecolor{dmblue}{HTML}{004A99}
+\definecolor{dmyellow}{HTML}{FFD100}
+\definecolor{codebg}{HTML}{F5F7FA}
+\definecolor{codekey}{HTML}{003B7A}
+\definecolor{codestr}{HTML}{8C4A00}
+\definecolor{codecomment}{HTML}{5B6B7D}
+
+\titleformat{\section}{\color{dmblue}\Large\bfseries}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\color{dmblue}\large\bfseries}{\thesubsection}{0.7em}{}
+
+\lstdefinestyle{code}{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{codekey}\bfseries,
+  stringstyle=\color{codestr},
+  commentstyle=\color{codecomment}\itshape,
+  numbers=left,
+  numberstyle=\tiny\color{codecomment},
+  numbersep=8pt,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codecomment!40},
+  breaklines=true,
+  breakatwhitespace=true,
+  showstringspaces=false,
+  tabsize=2,
+  xleftmargin=1.6em,
+  framexleftmargin=1.6em,
+}
+\lstdefinelanguage{java}{
+  keywords={abstract,boolean,break,byte,case,catch,char,class,const,continue,default,do,double,
+    else,enum,extends,final,finally,float,for,goto,if,implements,import,instanceof,int,
+    interface,long,native,new,package,private,protected,public,record,return,sealed,permits,
+    short,static,strictfp,super,switch,synchronized,this,throw,throws,transient,try,var,
+    void,volatile,while,yield},
+  sensitive=true,
+  comment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+}
+\lstdefinelanguage{typescript}{
+  morekeywords={type,interface,export,import,from,const,let,async,await,readonly,unknown,never},
+  keywords={abstract,any,as,async,await,break,case,catch,class,const,continue,debugger,
+    default,delete,do,else,enum,export,extends,false,finally,for,from,function,get,if,
+    implements,import,in,instanceof,interface,let,new,null,of,private,protected,public,
+    readonly,return,satisfies,set,static,super,switch,this,throw,true,try,type,typeof,
+    unknown,var,void,while,yield},
+  sensitive=true,
+  comment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]',
+  morestring=[b]",
+  morestring=[b]`,
+}
+\lstdefinelanguage{yaml}{
+  keywords={true,false,null},
+  sensitive=false,
+  comment=[l]{\#},
+  morestring=[b]',
+  morestring=[b]",
+}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+\title{\color{dmblue}\Huge dm Drugstore Vending Machine\\[6pt]
+\color{black}\Large Project Overview and Key Sources}
+\author{Michael Stashevski \and Java 25 - Spring Boot 4 - React 19 - TypeScript}
+\date{November 2026}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\vspace{4mm}
+\begin{center}
+\begin{minipage}{0.9\textwidth}
+\small
+This document is a companion to the repository at
+\url{https://github.com/mstaszew-dev/vending-machine}. It summarises the
+solution to the dm recruitment task, explains the architecture and the design
+decisions, and contains the most important parts of the source code: the
+\code{VendingMachine} domain aggregate, the REST layer, the client-side cart
+and money logic, and selected tests. The complete sources, the PlantUML
+diagrams and all 70 tests live in the repository.
+\end{minipage}
+\end{center}
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{Task and requirements}
+
+The task: build a small application for a dm drugstore vending machine, a
+backend and a frontend. The requirements are intentionally open; where
+something is unspecified, the decision was made consciously and is documented
+here and in the repository README.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Requirement} & \textbf{Implementation} \\
+\midrule
+Manages 8 different products & \code{ProductCatalog}: fixed master data \\
+Machine can be filled & \code{POST /api/machine/refill} + Staff tab, slot capacity 10 \\
+Customers buy, total is calculated & Client-side cart; checkout charges total, pays change \\
+Only buy what is in stock & Cart clamps to stock; backend rejects whole cart with 409 \\
+API used by the frontend & \code{/api/machine/*}, every mutation returns the new state \\
+At least one view & Single page, Customer and Staff tabs \\
+Functionality covered by tests & 40 backend tests + 30 frontend tests \\
+No persistence necessary & One in-memory machine aggregate \\
+\bottomrule
+\end{tabular}
+\caption{Requirements mapping}
+\end{table}
+
+\subsection{The eight products}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}rllr@{}}
+\toprule
+\textbf{ID} & \textbf{Name} & \textbf{Group} & \textbf{Price (EUR)} \\
+\midrule
+1 & Balea shower gel & Personal hygiene & 0.55 \\
+2 & SEINZ beard oil & Face & 7.95 \\
+3 & Balea body lotion & Personal hygiene & 0.75 \\
+4 & Fotoparadies USB stick 16GB & Photo & 6.95 \\
+5 & Nivea night cream Q10 & Face & 15.95 \\
+6 & Kinderhose (one-size) & Textile & 9.90 \\
+7 & All-purpose cleaner Power degreaser & Household & 1.75 \\
+8 & Profissimo Dirt eraser & Household & 2.25 \\
+\bottomrule
+\end{tabular}
+\caption{Fixed product master data (grouped into PERSONAL\_HYGIENE, FACE, PHOTO, TEXTILE, HOUSEHOLD)}
+\end{table}
+
+\subsection{REST API}
+
+One machine, so no machine id appears in the paths. Every mutating call answers
+with the new state, so the frontend never needs a follow-up request; the two
+exceptions are purchase (returns the receipt, the UI then refreshes) and
+\code{credit/return} (returns the refunded amount).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}llp{3.2cm}p{5.6cm}@{}}
+\toprule
+\textbf{Method} & \textbf{Path} & \textbf{Body} & \textbf{Result} \\
+\midrule
+GET & \code{/api/machine} & -- & credit, products (stock, capacity, unitsSold), coins, revenue \\
+POST & \code{/api/machine/credit} & \code{\{"amount": 0.50\}} & updated state \\
+POST & \code{/api/machine/credit/return} & -- & \code{\{"returned": 1.50\}} \\
+POST & \code{/api/machine/purchase} & \code{\{"items": [...]\}} & receipt: total, change, items, remainingCredit \\
+POST & \code{/api/machine/refill} & \code{\{"items": [...]\}} & updated state \\
+\bottomrule
+\end{tabular}
+\caption{Endpoints}
+\end{table}
+
+Errors use RFC 9457 problem details (\code{application/problem+json}) with a
+stable extra property \code{code}: \code{INVALID\_COIN},
+\code{INVALID\_QUANTITY}, \code{VALIDATION\_ERROR}, \code{INVALID\_REQUEST}
+(400), \code{UNKNOWN\_PRODUCT} (404), \code{INSUFFICIENT\_STOCK},
+\code{INSUFFICIENT\_CREDIT}, \code{SLOT\_CAPACITY\_EXCEEDED} (409).
+
+\section{Architecture overview}
+
+The backend is layered so that the business rules live in a pure domain class
+that knows nothing about HTTP, Spring or persistence:
+
+\begin{itemize}[itemsep=2pt]
+  \item \textbf{MachineController} (HTTP): thin translation of requests to domain calls; validation happens on the DTO records via Bean Validation.
+  \item \textbf{MachineExceptionHandler} (\code{@RestControllerAdvice}): maps domain and validation failures to problem details with a stable \code{code} and the request URI as \code{instance}.
+  \item \textbf{MachineService} (\code{@Service}): the seam between web and domain.
+  \item \textbf{VendingMachine}: the aggregate and the only owner of mutable state (stock, credit, revenue). Pure Java, all public operations \code{synchronized}.
+  \item \textbf{MachineConfig / MachineProperties}: composition root; the aggregate is built from the catalog and \code{machine.*} configuration (slot capacity 10, initial stock 3).
+  \item \textbf{ProductCatalog / Coin / Product}: fixed master data, immutable records.
+\end{itemize}
+
+The frontend (React 19, strict TypeScript, Vite, hand-written CSS) mirrors this
+discipline at the network boundary:
+
+\begin{itemize}[itemsep=2pt]
+  \item \textbf{App.tsx} owns all UI state (tab, machine state, cart) and is the only component that talks to the API.
+  \item \textbf{api.ts} is a typed client with runtime response narrowing and a 10\,s timeout.
+  \item \textbf{validation.ts} narrows every response from \code{unknown}; a schema mismatch becomes one readable error instead of an exception deep inside a component.
+  \item \textbf{cart.ts / money.ts} are pure functions: integer-cent arithmetic and clamping rules that make overselling impossible in the UI.
+\end{itemize}
+
+The corresponding PlantUML diagrams are in \code{docs/}:
+
+\begin{itemize}[itemsep=1pt]
+  \item \code{architecture.puml} -- components and their wiring
+  \item \code{domain-model.puml} -- classes, records, enums and relations
+  \item \code{sequence-purchase.puml} -- checkout flow, error paths
+  \item \code{sequence-refill.puml} -- refill flow, slot-capacity check
+\end{itemize}
+
+\subsection{Key design decisions}
+
+\begin{description}[style=nextline,itemsep=4pt]
+  \item[Money] Backend: \code{BigDecimal} with scale 2; prices stay exact and multiplication by an integer quantity stays exact. Frontend: integer cents, because floating point addition of \code{0.55 + 0.75} is exactly the class of bug a vending machine must not have.
+  \item[All-or-nothing checkout] Purchase and refill validate every position before any state is touched. A cart containing one unavailable product changes nothing: no stock, no credit, no revenue.
+  \item[One customer at a time] Every aggregate operation is \code{synchronized}; a single monitor is the cheapest way to keep stock, credit and revenue consistent. A concurrency test proves that parallel checkouts never oversell and that money is conserved.
+  \item[The server never trusts the cart] The cart lives in the browser, but stock and credit are re-checked at checkout, the only place where money and stock move.
+  \item[Coins only] 5, 10, 20, 50 cents, 1 and 2 EUR. All prices are below 16 EUR, so notes would only add change complexity. Coin matching ignores the scale (\code{0.5} equals \code{0.50}).
+  \item[Change is an amount, not denominations] The machine has no coin-hopper model; it always returns the remaining credit.
+  \item[Overflow-safe quantities] Quantities above the slot capacity are rejected, and duplicate cart lines are merged with \code{Math.addExact}, so absurd inputs can never overflow stock or money into negative numbers.
+\end{description}
+
+\subsection{Verification}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Suite} & \textbf{Count} & \textbf{Covers} \\
+\midrule
+\code{VendingMachineTest} & 18 & domain rules, atomicity, overflow, concurrency \\
+\code{ProductCatalogTest} & 5 & master data guarantees \\
+\code{MachineApiTest} & 16 & HTTP integration, validation, problem details \\
+\code{VendingMachineApplicationTests} & 1 & context load \\
+\textbf{Backend total} & \textbf{40} & \\
+\midrule
+\code{App.test.tsx} & 7 & load, error banner, coin, pay, refill, staff tab \\
+\code{validation.test.ts} & 8 & runtime response narrowing \\
+\code{cart.test.ts} & 6 & cart math, integer cents, payability \\
+\code{views.test.tsx} & 9 & product cards, cart panel, staff table \\
+\textbf{Frontend total} & \textbf{30} & \\
+\bottomrule
+\end{tabular}
+\caption{Test overview. CI runs both suites on every push (GitHub Actions).}
+\end{table}
+
+\newpage
+\section{Backend: the machine aggregate}
+
+This is the heart of the solution: all business rules, no framework code.
+The class is shown in full, including package and imports.
+
+\lstinputlisting[language=java,style=code]{code/VendingMachine.java}
+
+\newpage
+\section{Backend: REST layer and error handling}
+
+\subsection{Controller}
+
+\lstinputlisting[language=java,style=code]{code/MachineController.java}
+
+\subsection{Problem details}
+
+\lstinputlisting[language=java,style=code]{code/MachineExceptionHandler.java}
+
+\newpage
+\subsection{Composition root and configuration}
+
+\lstinputlisting[language=java,style=code]{code/MachineConfig.java}
+
+\lstinputlisting[language=java,style=code]{code/MachineProperties.java}
+
+\subsection{Value objects}
+
+\lstinputlisting[language=java,style=code]{code/Product.java}
+
+\lstinputlisting[language=java,style=code]{code/Coin.java}
+
+\newpage
+\section{Frontend: cart, money and network boundary}
+
+\subsection{Cart rules (pure functions)}
+
+\lstinputlisting[language=typescript,style=code]{code/cart.ts}
+
+\subsection{Integer-cent money helpers}
+
+\lstinputlisting[language=typescript,style=code]{code/money.ts}
+
+\newpage
+\subsection{Runtime validation at the boundary}
+
+Excerpt: the purchase-receipt and problem-details parsers are omitted.
+
+\lstinputlisting[language=typescript,style=code,firstline=1,lastline=114]{code/validation.ts}
+
+\subsection{API client with timeout}
+
+\lstinputlisting[language=typescript,style=code,firstline=1,lastline=96]{code/api.ts}
+
+\newpage
+\subsection{Application state and the pay flow}
+
+Excerpt: JSX render tree and the staff/refill callbacks are omitted.
+
+\lstinputlisting[language=typescript,style=code,firstline=1,lastline=95]{code/App.tsx}
+
+\section{Selected tests}
+
+\subsection{Concurrency: parallel checkouts never oversell}
+
+\lstinputlisting[language=java,style=code,firstline=1,lastline=140]{code/VendingMachineConcurrencyTest.java}
+
+\newpage
+\subsection{HTTP integration: problem details and no side effects on failure}
+
+\lstinputlisting[language=java,style=code,firstline=1,lastline=150]{code/MachineApiExcerptTest.java}
+
+\section{Running the project}
+
+\lstinputlisting[language={},style=code]{code/Dockerfile}
+
+\begin{itemize}[itemsep=2pt]
+  \item Backend: \code{./mvnw spring-boot:run} (port 8080), tests with \code{./mvnw test}.
+  \item Frontend: \code{cd frontend \&\& npm install \&\& npm run dev} (port 5173, \code{/api} proxied).
+  \item Swagger UI: \code{http://localhost:8080/swagger-ui.html}.
+  \item Docker: \code{docker build -t dm-vending-machine .} builds one image serving API and UI.
+  \item CI: GitHub Actions runs backend tests (Java 25) and frontend lint/typecheck/test/build (Node 22) on every push.
+\end{itemize}
+
+\end{document}
