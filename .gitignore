@@ -36,4 +36,5 @@ build/
 ### Node / Vite ###
 node_modules/
 frontend/dist/
+frontend/coverage/
 *.tsbuildinfo

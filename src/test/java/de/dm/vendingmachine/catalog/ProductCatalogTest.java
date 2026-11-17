@@ -1,6 +1,7 @@
 package de.dm.vendingmachine.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -56,5 +57,28 @@ class ProductCatalogTest {
 
         assertThat(products).isUnmodifiable();
         assertThat(catalog.findAll()).hasSize(8);
+    }
+
+    @Test
+    void productRejectsInvalidIdsPricesAndUnrepresentablePrecision() {
+        assertThatThrownBy(() -> new Product(
+                0, "test product", ProductGroup.FACE, new BigDecimal("1.00")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("id must be positive");
+        assertThatThrownBy(() -> new Product(
+                1, "test product", ProductGroup.FACE, new BigDecimal("-0.01")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("price must not be negative");
+        assertThatThrownBy(() -> new Product(
+                1, "test product", ProductGroup.FACE, new BigDecimal("0.001")))
+                .isInstanceOf(ArithmeticException.class);
+    }
+
+    @Test
+    void coinLookupRejectsNullAndProductGroupsHaveReadableLabels() {
+        assertThat(Coin.of(null)).isEmpty();
+        assertThat(ProductGroup.values())
+                .extracting(ProductGroup::getLabel)
+                .containsExactly("Personal hygiene", "Face", "Photo", "Textile", "Household");
     }
 }

@@ -40,13 +40,17 @@ the image runs the jar as a non-root user on a slim JRE.
 ### Tests and checks
 
 ```bash
-./mvnw test                 # 40 backend tests: domain, HTTP integration, catalog, concurrency
+./mvnw -B verify             # 48 backend tests plus a 90% JaCoCo line-coverage gate
 cd frontend
-npm test                    # 30 frontend tests: App flows, cart math, validation, views
+npm run test:coverage       # 48 frontend tests plus a 90% Vitest line-coverage gate
 npm run typecheck           # tsc -b, strict
 npm run lint                # oxlint
 npm run build               # production bundle
 ```
+
+Backend and frontend line coverage are measured and gated separately. Branch coverage is
+reported to help find missing decision and error-path tests. HTML reports are written to
+`target/site/jacoco/` and `frontend/coverage/`.
 
 ## Diagrams
 
@@ -55,10 +59,15 @@ PlantUML sources live in [`docs/`](docs/), render them with `plantuml docs/*.pum
 
 | Diagram | What it shows |
 |---|---|
-| [`architecture.puml`](docs/architecture.puml) | Components: frontend, controller, service, aggregate, config |
-| [`domain-model.puml`](docs/domain-model.puml) | Domain classes, records, enums and their relations |
-| [`sequence-purchase.puml`](docs/sequence-purchase.puml) | Checkout flow: validation, all-or-nothing commit, error paths |
-| [`sequence-refill.puml`](docs/sequence-refill.puml) | Staff refill flow with slot-capacity check |
+| [`architecture.puml`](docs/architecture.puml) | Runtime components and how browser, frontend, HTTP API, and backend connect |
+| [`backend-classes.puml`](docs/backend-classes.puml) | Backend controller, request records, service, domain aggregate, and startup wiring |
+| [`domain-model.puml`](docs/domain-model.puml) | Vending-machine domain classes, records, enums, and relationships |
+| [`frontend-components.puml`](docs/frontend-components.puml) | Frontend screen pieces, helper modules, and plain-language React terms |
+| [`integration-contract.puml`](docs/integration-contract.puml) | HTTP routes, JSON request/response shapes, validation, and error mapping |
+| [`sequence-purchase.puml`](docs/sequence-purchase.puml) | Customer checkout, all-or-nothing validation, and failure paths |
+| [`sequence-refill.puml`](docs/sequence-refill.puml) | Staff refill with capacity checks and no partial updates |
+| [`sequence-credit.puml`](docs/sequence-credit.puml) | Insert-coin and return-credit interactions |
+| [`test-coverage.puml`](docs/test-coverage.puml) | Test files mapped to code and behaviors, with test boundaries explained |
 
 ## How the requirements are covered
 
@@ -70,7 +79,7 @@ PlantUML sources live in [`docs/`](docs/), render them with `plantuml docs/*.pum
 | Only buy as many as are in the machine | Quantity is clamped to stock in the cart, and the backend rejects the whole cart with `409 INSUFFICIENT_STOCK` |
 | API used by the frontend | `/api/machine/*`, see the table below |
 | At least one view | Single page with a Customer and a Staff view |
-| Functionality covered by tests | 40 backend tests (18 domain, 5 catalog, 16 HTTP, 1 context) and 30 frontend tests (4 files) |
+| Functionality covered by tests | 48 backend tests (domain, catalog, configuration, HTTP integration, context) and 48 frontend tests (API adapter, app flows, cart math, validation, views) |
 
 ## API
 

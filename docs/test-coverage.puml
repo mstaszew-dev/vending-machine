@@ -1,0 +1,90 @@
+@startuml test-coverage
+!pragma layout smetana
+title Test map - which tests check which behavior
+
+left to right direction
+skinparam componentStyle rectangle
+
+package "Backend production code" {
+  component "VendingMachine\npurchase, refund, refill,\nstock, credit, concurrency" as machine
+  component "ProductCatalog\nProduct, Coin, ProductGroup" as catalog
+  component "MachineProperties\nstartup limits" as properties
+  component "Controller + exception handler\nHTTP and problem responses" as api
+  component "MachineService + configuration" as wiring
+  component "VendingMachineApplication\nSpring startup" as application
+}
+
+package "Backend tests (JUnit 5)" {
+  component "VendingMachineTest\nUNIT: domain rules and safety" as vmTest
+  component "ProductCatalogTest\nUNIT: fixed master data" as catalogTest
+  component "MachinePropertiesTest\nUNIT: configuration validation" as propertiesTest
+  component "MachineApiTest\nINTEGRATION: real Spring MVC via MockMvc" as apiTest
+  component "VendingMachineApplicationTests\nSMOKE: application context starts" as appTest
+}
+
+package "Frontend production code" {
+  component "cart.ts + money.ts\ncart and exact-cent rules" as cart
+  component "validation.ts\nruntime response checks" as validation
+  component "api.ts\nHTTP request adapter" as frontendApi
+  component "App + CustomerView + StaffView\nscreen state and user actions" as screens
+  component "CartPanel + ProductCard\ncustomer controls" as controls
+  component "main.tsx\nbrowser startup entry" as entry
+}
+
+package "Frontend tests (Vitest + Testing Library)" {
+  component "cart.test.ts\nUNIT: cart and money rules" as cartTest
+  component "validation.test.ts\nUNIT: valid and invalid data" as validationTest
+  component "api.test.ts\nINTEGRATION: request and response boundary" as apiTestFront
+  component "App.test.tsx\nINTEGRATION: full screen flows,\nAPI module replaced by test doubles" as appTestFront
+  component "views.test.tsx\nINTEGRATION: real views and child controls" as viewsTest
+}
+
+vmTest ..> machine : unit tests
+catalogTest ..> catalog : unit tests
+propertiesTest ..> properties : unit tests
+apiTest ..> api : HTTP integration
+apiTest ..> wiring : starts real Spring beans
+apiTest ..> machine : state changes
+appTest ..> application : context smoke test
+
+cartTest ..> cart : unit tests
+validationTest ..> validation : unit tests
+apiTestFront ..> frontendApi : tests real request code
+apiTestFront ..> validation : tests response parsing
+appTestFront ..> screens : renders real App and views
+viewsTest ..> controls : renders and clicks real components
+viewsTest ..> cart : verifies callbacks and control rules
+
+note bottom of apiTest
+MockMvc sends HTTP requests through Spring MVC,
+the controller, service and machine. It does not
+start a real browser or make external network calls.
+end note
+
+note bottom of apiTestFront
+The fetch function is replaced with controlled
+HTTP responses. The real API client still builds
+URLs and JSON, checks response shapes and maps errors.
+end note
+
+note bottom of appTestFront
+The UI tests click real buttons and inspect what
+a user can see. Only the API calls are replaced,
+so no live backend is needed for these tests.
+end note
+
+note bottom of entry
+This one-line browser bootstrap is included in
+the frontend total but is not directly exercised.
+The 90% threshold is for the frontend as a whole,
+not a separate threshold for every file.
+end note
+
+legend bottom
+Solid arrows are normal application calls.
+Dashed arrows show a test exercising production code.
+UNIT means one rule/helper is tested on its own.
+INTEGRATION means connected parts are tested together.
+SMOKE means a basic startup check.
+endlegend
+@enduml

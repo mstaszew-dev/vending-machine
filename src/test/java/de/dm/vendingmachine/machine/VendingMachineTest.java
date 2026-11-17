@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.dm.vendingmachine.catalog.ProductCatalog;
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -247,6 +248,44 @@ class VendingMachineTest {
         assertThat(stock(SHOWER_GEL)).isEqualTo(3);
         assertThat(machine.view().credit()).isEqualByComparingTo("2.00");
         assertThat(machine.view().totalRevenue()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void rejectsMissingProductsAndNonPositiveSlotCapacity() {
+        assertThatThrownBy(() -> new VendingMachine(null, 10, 3))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("products must not be empty");
+        assertThatThrownBy(() -> new VendingMachine(List.of(), 10, 3))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("products must not be empty");
+        assertThatThrownBy(() -> new VendingMachine(new ProductCatalog().findAll(), 0, 3))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("capacityPerSlot must be positive");
+    }
+
+    @Test
+    void rejectsNullCartAndNullCartLines() {
+        assertThatThrownBy(() -> machine.purchase(null))
+                .isInstanceOf(MachineException.class)
+                .extracting(exception -> ((MachineException) exception).getCode())
+                .isEqualTo(MachineError.INVALID_QUANTITY);
+        assertThatThrownBy(() -> machine.refill(Arrays.asList((CartLine) null)))
+                .isInstanceOf(MachineException.class)
+                .extracting(exception -> ((MachineException) exception).getCode())
+                .isEqualTo(MachineError.INVALID_QUANTITY);
+    }
+
+    @Test
+    void rejectsOverflowWhenMergingLargeButIndividuallyValidLines() {
+        var largeCapacityMachine = new VendingMachine(
+                new ProductCatalog().findAll(), Integer.MAX_VALUE, 0);
+
+        assertThatThrownBy(() -> largeCapacityMachine.refill(List.of(
+                new CartLine(SHOWER_GEL, 1_500_000_000),
+                new CartLine(SHOWER_GEL, 1_500_000_000))))
+                .isInstanceOf(MachineException.class)
+                .extracting(exception -> ((MachineException) exception).getCode())
+                .isEqualTo(MachineError.INVALID_QUANTITY);
     }
 
     @Test

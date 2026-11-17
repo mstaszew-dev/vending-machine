@@ -23,6 +23,7 @@ import * as api from './api'
 
 const mockedGetMachine = vi.mocked(api.getMachine)
 const mockedInsertCredit = vi.mocked(api.insertCredit)
+const mockedReturnCredit = vi.mocked(api.returnCredit)
 const mockedPurchase = vi.mocked(api.purchase)
 const mockedRefill = vi.mocked(api.refill)
 
@@ -56,6 +57,24 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: 'Retry' }))
     expect(await screen.findByText('Balea shower gel')).toBeInTheDocument()
+    expect(mockedGetMachine).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the current machine state when reload fails', async () => {
+    const user = userEvent.setup()
+    mockedGetMachine
+      .mockResolvedValueOnce(makeMachineState())
+      .mockRejectedValueOnce(new ApiError('Could not reload state', 503))
+
+    render(<App />)
+    expect(await screen.findByText('Balea shower gel')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Reload' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not reload state',
+    )
+    expect(screen.getByText('Balea shower gel')).toBeInTheDocument()
     expect(mockedGetMachine).toHaveBeenCalledTimes(2)
   })
 
@@ -126,6 +145,46 @@ describe('App', () => {
     expect(
       screen.getByText('Nothing picked yet. Choose a product on the left.'),
     ).toBeInTheDocument()
+  })
+
+  it('keeps the cart and reports a rejected purchase', async () => {
+    const user = userEvent.setup()
+    mockedGetMachine.mockResolvedValue(makeMachineState({ credit: 1 }))
+    mockedPurchase.mockRejectedValue(
+      new ApiError('Not enough credit', 409, 'INSUFFICIENT_CREDIT'),
+    )
+
+    render(<App />)
+    await screen.findByText('Balea shower gel')
+
+    await user.click(screen.getByRole('button', { name: 'Add one Balea shower gel' }))
+    await user.click(screen.getByRole('button', { name: /Pay 0,55/ }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not enough credit')
+    expect(screen.getByLabelText('Balea shower gel in cart')).toHaveTextContent('1')
+    expect(screen.getByRole('button', { name: /Pay 0,55/ })).toBeEnabled()
+    expect(mockedGetMachine).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns inserted credit and refreshes the displayed machine state', async () => {
+    const user = userEvent.setup()
+    const paidIn = makeMachineState({ credit: 1.2 })
+    const refunded = makeMachineState()
+    mockedGetMachine
+      .mockResolvedValueOnce(paidIn)
+      .mockResolvedValueOnce(refunded)
+    mockedReturnCredit.mockResolvedValue({ returned: 1.2 })
+
+    render(<App />)
+    await screen.findByText('Balea shower gel')
+    await user.click(screen.getByRole('button', { name: 'Return coins' }))
+
+    expect(
+      await screen.findByText('Returned 1,20 € in coins.'),
+    ).toBeInTheDocument()
+    expect(screen.getAllByText('0,00 €', { selector: 'dd' })).toHaveLength(2)
+    expect(mockedReturnCredit).toHaveBeenCalledOnce()
+    expect(mockedGetMachine).toHaveBeenCalledTimes(2)
   })
 
   it('refills a slot from the staff tab and reports it', async () => {

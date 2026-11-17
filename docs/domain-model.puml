@@ -1,4 +1,5 @@
 @startuml domain
+!pragma layout smetana
 title dm vending machine - domain model
 
 skinparam classAttributeIconSize 0

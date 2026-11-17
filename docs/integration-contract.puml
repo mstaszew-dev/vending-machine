@@ -1,0 +1,59 @@
+@startuml integration-contract
+!pragma layout smetana
+title Browser-to-backend integration contract
+
+left to right direction
+skinparam componentStyle rectangle
+
+actor "Customer or staff member" as user
+component "React screen\nApp + child components" as ui
+component "Frontend API client\napi.ts" as client
+rectangle "HTTP JSON boundary\n/api/machine" as http
+component "MachineController\nSpring MVC routes" as controller
+component "MachineService" as service
+component "VendingMachine\nIn-memory business state" as machine
+component "MachineExceptionHandler\nRFC 9457 responses" as errors
+
+user --> ui : clicks a screen control
+ui --> client : calls an operation
+client --> http : sends JSON over HTTP
+http --> controller : maps method and path
+controller --> service : passes typed request values
+service --> machine : runs business rules
+machine --> service : state, receipt or refund
+service --> controller
+controller --> http : JSON success response
+http --> client
+client --> ui : validates and returns data
+machine ..> errors : throws a machine error
+controller ..> errors : validation or body error
+errors --> http : 4xx/5xx problem+json
+http --> client : stable code and detail
+client --> ui : ApiError shown as a banner
+
+note top of http
+GET   /api/machine
+  -> MachineView: credit, stock, coins, revenue
+POST  /api/machine/credit {amount}
+  -> MachineView
+POST  /api/machine/credit/return
+  -> {returned}
+POST  /api/machine/purchase {items}
+  -> PurchaseResult: total, change, receipt
+POST  /api/machine/refill {items}
+  -> MachineView
+end note
+
+note bottom of errors
+Error replies use application/problem+json.
+The stable code (for example INSUFFICIENT_STOCK)
+lets the frontend identify the problem without
+trying to read meaning from the detail text.
+end note
+
+note bottom of machine
+The frontend cart is only a request.
+The backend checks stock, credit and capacity
+again before changing machine state.
+end note
+@enduml

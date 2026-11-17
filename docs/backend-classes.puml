@@ -1,0 +1,102 @@
+@startuml backend-classes
+!pragma layout smetana
+title Backend class diagram - HTTP, application service and composition
+
+left to right direction
+skinparam classAttributeIconSize 0
+
+package "HTTP layer (api)" {
+  class MachineController <<Spring REST controller>> {
+    +state(): MachineView
+    +insertCredit(request): MachineView
+    +returnCredit(): ReturnedCreditResponse
+    +purchase(request): PurchaseResult
+    +refill(request): MachineView
+  }
+  class MachineExceptionHandler <<Spring advice>> {
+    +handleMachineException(...): ProblemDetail
+    +handleValidationException(...): ProblemDetail
+    +handleUnreadableBody(...): ProblemDetail
+  }
+  class InsertCreditRequest <<validated record>> {
+    amount: BigDecimal
+  }
+  class PositionsRequest <<validated record>> {
+    items: List<CartItemRequest>
+  }
+  class CartItemRequest <<validated record>> {
+    productId: long
+    quantity: int
+  }
+  class ReturnedCreditResponse <<record>> {
+    returned: BigDecimal
+  }
+}
+
+package "Application and domain" {
+  class MachineService <<Spring service>> {
+    -machine: VendingMachine
+    +view(): MachineView
+    +insertCoin(amount): MachineView
+    +returnCredit(): BigDecimal
+    +purchase(lines): PurchaseResult
+    +refill(lines): MachineView
+  }
+  class VendingMachine <<domain aggregate>> {
+    -products: Map<Long, Product>
+    -stock: Map<Long, Integer>
+    -credit: BigDecimal
+    -totalRevenue: BigDecimal
+    +view(): MachineView
+    +insertCoin(amount): MachineView
+    +returnCredit(): BigDecimal
+    +purchase(lines): PurchaseResult
+    +refill(lines): MachineView
+  }
+}
+
+package "Startup configuration" {
+  class MachineConfig <<Spring configuration>> {
+    +vendingMachine(catalog, properties): VendingMachine
+  }
+  class MachineProperties <<configuration record>> {
+    capacityPerSlot: int
+    initialStockPerSlot: int
+  }
+  class ProductCatalog {
+    +findAll(): List<Product>
+    +find(id): Optional<Product>
+  }
+}
+
+MachineController --> MachineService : delegates each route
+MachineController ..> InsertCreditRequest
+MachineController ..> PositionsRequest
+MachineController ..> ReturnedCreditResponse
+PositionsRequest *-- "1..*" CartItemRequest
+MachineController ..> MachineView
+MachineController ..> PurchaseResult
+MachineExceptionHandler ..> MachineException : maps domain errors
+MachineExceptionHandler ..> MachineError : selects HTTP status
+MachineService --> VendingMachine : calls the aggregate
+MachineConfig ..> ProductCatalog : reads fixed products
+MachineConfig ..> MachineProperties : reads capacity and stock
+MachineConfig ..> VendingMachine : creates the single bean
+
+note bottom of MachineController
+The controller converts validated JSON records
+to domain values. The machine checks business
+rules again; HTTP validation is not trusted alone.
+end note
+
+note bottom of MachineExceptionHandler
+Errors become RFC 9457 problem details with
+a stable code, status, request path and detail.
+end note
+
+note bottom of MachineConfig
+The Spring container injects the configured
+VendingMachine into MachineService at startup.
+There is no database or persistence class.
+end note
+@enduml

@@ -1,51 +1,83 @@
 @startuml sequence-purchase
-title purchase - all or nothing checkout
+title Customer purchase - validate first, then change stock and credit
 
 actor Customer
-participant "App.tsx" as ui
-participant "MachineController" as ctrl
-participant "VendingMachine" as vm
-database "in-memory state" as state
+participant "CustomerView" as view
+participant "App.tsx" as app
+participant "api.ts" as api
+participant "MachineController" as controller
+participant "MachineService" as service
+participant "VendingMachine" as machine
+participant "MachineExceptionHandler" as errors
 
-Customer -> ui : + / - on products
-note right of ui : cart.ts clamps every\nquantity to the slot stock.\nThe cart lives client-side.
-Customer -> ui : insert coins
-ui -> ctrl : POST /api/machine/credit {amount}
-ctrl -> vm : insertCoin(amount)
-vm -> state : credit += coin.value
-vm --> ctrl : MachineView (credit)
-ctrl --> ui : 200 MachineView
+Customer -> view : clicks + on a product
+view -> app : onSetQuantity(product, quantity)
+app -> app : cart.ts clamps quantity to stock
+note right of app
+  The cart is remembered in the browser.
+  The server still checks stock and credit
+  when the customer pays.
+end note
 
-Customer -> ui : Pay
-ui -> ctrl : POST /api/machine/purchase\n{items: [{productId, quantity}]}
+Customer -> view : inserts coins
+view -> app : onInsertCoin(amount)
+app -> api : insertCredit(amount)
+api -> controller : POST /api/machine/credit\n{amount}
+controller -> service : insertCoin(amount)
+service -> machine : insertCoin(amount)
+machine --> service : MachineView
+service --> controller
+controller --> api : 200 MachineView
+api --> app : validated MachineView
+app -> view : redraw with new credit
 
-ctrl -> vm : purchase(lines)
+Customer -> view : clicks Pay
+view -> app : onPay()
+app -> api : purchase(cart lines)
+api -> controller : POST /api/machine/purchase\n{items: [{productId, quantity}]}
+controller -> service : purchase(CartLine list)
+service -> machine : purchase(lines)
 
-group validation (nothing is mutated yet)
-  vm -> vm : normalise()\n' merge duplicates, reject\n' quantity > capacity
-  vm -> state : stock check per line
+group Check every cart line before changing anything
+  machine -> machine : merge duplicate product lines
+  machine -> machine : reject empty, null, or invalid quantities
+  machine -> machine : check each product exists and has enough stock
   alt any line exceeds stock
-    vm --x ctrl : MachineException(INSUFFICIENT_STOCK)
-    ctrl --x ui : 409 problem+json {code}
-    ui -> Customer : red banner, cart kept
+    machine --x service : MachineException(INSUFFICIENT_STOCK)
+    service --x controller
+    controller -> errors : handle domain exception
+    errors --> api : 409 problem+json {code, detail}
+    api --> app : ApiError
+    app -> Customer : show error banner\nkeep cart and machine state
   else every line fits
-    vm -> vm : total = sum(price x qty)
+    machine -> machine : total = sum(price x quantity)
     alt credit < total
-      vm --x ctrl : MachineException(INSUFFICIENT_CREDIT)
-      ctrl --x ui : 409 problem+json {code}
+      machine --x service : MachineException(INSUFFICIENT_CREDIT)
+      service --x controller
+      controller -> errors : handle domain exception
+      errors --> api : 409 problem+json {code, detail}
+      api --> app : ApiError
+      app -> Customer : show error banner\nkeep cart and credit
     else credit covers total
-      group commit
-        vm -> state : stock -= qty, unitsSold += qty
-        vm -> state : totalRevenue += total
-        vm -> state : credit -> 0 (change returned)
+      group Apply the purchase after all checks pass
+        machine -> machine : stock -= quantity\nunitsSold += quantity
+        machine -> machine : totalRevenue += total
+        machine -> machine : credit becomes 0\nremaining value is change
       end
-      vm --> ctrl : PurchaseResult\n{total, change, items, remainingCredit: 0.00}
-      ctrl --> ui : 200 PurchaseResult
-      ui -> Customer : green banner\n"Paid X, take your change Y"
-      ui -> ctrl : GET /api/machine (refresh)
-      ctrl -> vm : view()
-      vm --> ctrl : MachineView
-      ctrl --> ui : 200 MachineView
+      machine --> service : PurchaseResult
+      service --> controller
+      controller --> api : 200 PurchaseResult
+      api --> app : validated receipt
+      app -> app : clear cart and set paid/change notice
+      app -> api : getMachine()
+      api -> controller : GET /api/machine
+      controller -> service : view()
+      service -> machine : view()
+      machine --> service : MachineView
+      service --> controller
+      controller --> api : 200 MachineView
+      api --> app : validated MachineView
+      app -> Customer : show new stock and change notice
     end
   end
 end

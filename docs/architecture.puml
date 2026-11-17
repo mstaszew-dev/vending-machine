@@ -1,49 +1,56 @@
 @startuml architecture
-title dm vending machine - component architecture
+!pragma layout smetana
+title Vending machine - application components and connections
 
+left to right direction
 skinparam componentStyle rectangle
 
-component "Frontend\n(React 19 + TypeScript)" as frontend {
-  component "App.tsx\n(tabs, banners, state)" as app
-  component "CustomerView\n+ CartPanel + ProductCard" as customer
-  component "StaffView\n(stats + refill table)" as staff
-  component "api.ts\n(typed client, 10s timeout)" as apiClient
-  component "validation.ts\n(runtime narrowing)" as validation
-  component "cart.ts / money.ts\n(pure rules, integer cents)" as pure
+actor Customer
+actor Staff
+
+package "Browser application (React 19 + TypeScript)" {
+  component "App.tsx\nOwns screen state and API actions" as app
+  component "CustomerView\nProduct shelf and checkout" as customer
+  component "StaffView\nMachine statistics and refills" as staff
+  component "CartPanel + ProductCard\nCustomer controls" as customerParts
+  component "api.ts\nHTTP requests and timeouts" as api
+  component "validation.ts\nChecks server data at runtime" as validation
+  component "cart.ts + money.ts\nCart rules and exact cents" as cartRules
 }
 
 package "Backend (Java 25 + Spring Boot 4)" {
   component "MachineController\n/api/machine/**" as controller
-  component "MachineExceptionHandler\nRFC 9457 problem details" as handler
-  component "MachineService\n@Service seam" as service
-  component "VendingMachine\naggregate, synchronized" as machine
-  component "MachineConfig\ncomposition root" as config
-  component "ProductCatalog\n8 fixed products" as catalog
-  component "MachineProperties\nmachine.* config" as props
+  component "MachineExceptionHandler\nHTTP problem responses" as handler
+  component "MachineService\nApplication service" as service
+  component "VendingMachine\nBusiness rules and state" as machine
+  component "MachineConfig\nCreates the machine" as config
+  component "ProductCatalog\nFixed product list" as catalog
+  component "MachineProperties\nCapacity and starting stock" as properties
 }
 
-app --> customer : customer tab
-app --> staff : staff tab
-customer --> apiClient
-staff --> apiClient
-apiClient --> validation : response narrowing
-customer --> pure : cart math
-app --> pure : cart state
+Customer --> app : chooses products,\nadds coins, pays
+Staff --> app : opens staff view,\nrefills slots
+app --> customer : shows customer tab
+app --> staff : shows staff tab
+customer --> customerParts : renders controls
+customer --> cartRules : quantity and totals
+app --> cartRules : stores cart
+app --> api : calls machine operations
+api --> validation : checks every response
+api --> controller : HTTP + JSON\nGET/POST /api/machine/**
 
-apiClient --> controller : HTTP JSON
-
-controller --> service
-service --> machine
-controller ..> handler : throws MachineException
-handler --> controller : ProblemDetail
-config --> machine : builds from
+controller --> service : delegates requests
+service --> machine : calls domain operations
+controller ..> handler : exceptions are translated
+handler --> api : application/problem+json\nwith stable error code
+config --> machine : creates the bean that Spring injects
 config --> catalog
-config --> props
+config --> properties
 
 note bottom of machine
-  All mutable state lives here:
-  stock, credit, totalRevenue.
-  In-memory only, one monitor
-  per operation. No database.
+  The machine is the only owner of
+  mutable stock, credit, units sold,
+  and revenue. State is in memory;
+  there is no database.
 end note
 @enduml

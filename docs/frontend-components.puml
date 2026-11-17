@@ -1,0 +1,58 @@
+@startuml frontend-components
+!pragma layout smetana
+title Frontend structure - screen pieces and data flow
+
+top to bottom direction
+skinparam componentStyle rectangle
+
+package "One page (App.tsx)" {
+  component "App\nRemembers current tab,\nmachine data, cart,\nloading and messages" as app
+}
+
+package "Screen pieces (React components)" {
+  component "CustomerView\nShows products and checkout" as customer
+  component "StaffView\nShows sales and refill controls" as staff
+  component "ProductCard\nOne product and its buttons" as card
+  component "CartPanel\nCart, coins, total and pay" as panel
+}
+
+package "TypeScript helper files" {
+  component "cart.ts\nQuantity and payment rules" as cart
+  component "money.ts\nConverts and formats cents" as money
+  component "api.ts\nSends requests to the server" as api
+  component "validation.ts\nChecks server answers" as validation
+  component "types.ts\nNames the data shapes" as types
+}
+
+app --> customer : shows when Customer tab is open
+app --> staff : shows when Staff tab is open
+customer --> card : draws one card per product
+customer --> panel : places cart controls beside shelf
+app --> cart : changes cart and asks for totals
+customer --> cart : looks up each product quantity
+panel --> cart : totals cart and checks if Pay is allowed
+panel --> money : displays exact money amounts
+card --> money : displays product price
+app --> api : loads, buys, refunds or refills
+api --> validation : checks the returned data
+api --> types : returns named data shapes
+customer --> types : receives machine and product data
+staff --> types : receives machine and product data
+
+note right of app
+  Plain words:
+  A component is a reusable piece of the screen.
+  Props are values and actions passed into a component.
+  State is data the screen remembers while it is open.
+  A callback is an action passed down for a child to call.
+  A hook is a React helper such as useState or useEffect.
+  The API client is the code that sends HTTP requests.
+end note
+
+note bottom of panel
+  App owns the real cart and machine state.
+  Child components receive props and report
+  clicks through callbacks; they do not call
+  the backend themselves.
+end note
+@enduml

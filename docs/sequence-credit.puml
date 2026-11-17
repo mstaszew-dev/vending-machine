@@ -1,0 +1,49 @@
+@startuml sequence-credit
+title Insert coins and return credit
+
+actor Customer
+participant "App.tsx" as app
+participant "CartPanel" as panel
+participant "api.ts" as api
+participant "MachineController" as controller
+participant "MachineService" as service
+participant "VendingMachine" as machine
+
+Customer -> panel : clicks an accepted coin
+panel -> app : onInsertCoin(amount)
+app -> app : perform(insertCredit)
+app -> api : insertCredit(amount)
+api -> controller : POST /api/machine/credit\n{amount}
+controller -> service : insertCoin(amount)
+service -> machine : insertCoin(amount)
+machine -> machine : add accepted coin to credit
+machine --> controller : MachineView
+controller --> api : 200 MachineView
+api --> app : validated MachineView
+app -> Customer : screen shows updated credit
+
+Customer -> panel : clicks Return coins
+panel -> app : onReturnCredit()
+app -> app : perform(returnCredit)
+app -> api : returnCredit()
+api -> controller : POST /api/machine/credit/return
+controller -> service : returnCredit()
+service -> machine : returnCredit()
+machine -> machine : save credit, then set credit to 0
+machine --> controller : returned amount
+controller --> api : 200 {returned}
+api --> app : validated refund amount
+app -> api : getMachine()
+api -> controller : GET /api/machine
+controller -> service : view()
+service -> machine : view()
+machine --> controller : MachineView with 0 credit
+controller --> api : 200 MachineView
+api --> app : validated MachineView
+app -> Customer : show refund notice and zero credit
+
+note over machine
+Only accepted coin values are added.
+Returning credit changes no stock or revenue.
+end note
+@enduml

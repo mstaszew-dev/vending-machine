@@ -1,42 +1,62 @@
 @startuml sequence-refill
-title refill - staff tops up slots, never above capacity
+title Staff refill - check every slot before adding stock
 
 actor "Staff" as staff
-participant "StaffView" as ui
-participant "MachineController" as ctrl
-participant "VendingMachine" as vm
-database "in-memory state" as state
+participant "StaffView" as view
+participant "App.tsx" as app
+participant "api.ts" as api
+participant "MachineController" as controller
+participant "MachineService" as service
+participant "VendingMachine" as machine
+participant "MachineExceptionHandler" as errors
 
-staff -> ui : open Staff tab
-ui -> ctrl : GET /api/machine
-ctrl -> vm : view()
-vm --> ctrl : MachineView\n(stock, capacity, unitsSold, revenue)
-ctrl --> ui : 200 MachineView
+== when the page first opens ==
+app -> api : getMachine()
+api -> controller : GET /api/machine
+controller -> service : view()
+service -> machine : view()
+machine --> service : MachineView
+service --> controller
+controller --> api : 200 MachineView
+api --> app : validated stock and capacity
 
-staff -> ui : type amount or "Fill all slots"\n' UI clamps to 1..(capacity - stock)
-ui -> ctrl : POST /api/machine/refill\n{items: [{productId, quantity}]}
+== staff switches tabs ==
+staff -> app : opens Staff tab
+app -> view : render staff view with existing state
 
-ctrl -> vm : refill(lines)
+staff -> view : enters amount or clicks Fill all
+view -> view : clamp amount to free slot space
+view -> app : onRefill(items)
+app -> api : refill(items)
+api -> controller : POST /api/machine/refill\n{items: [{productId, quantity}]}
+controller -> service : refill(CartLine list)
+service -> machine : refill(lines)
 
-group validation (nothing is mutated yet)
-  vm -> vm : normalise()
-  vm -> state : current stock per line
+group Check every requested slot before changing stock
+  machine -> machine : merge duplicate product lines
+  machine -> machine : reject empty or invalid quantities
+  machine -> machine : check each product and free slot space
   alt current + requested > capacity
-    vm --x ctrl : MachineException(SLOT_CAPACITY_EXCEEDED)
-    ctrl --x ui : 409 problem+json {code}
-    ui -> staff : red banner, nothing changed
+    machine --x service : MachineException(SLOT_CAPACITY_EXCEEDED)
+    service --x controller
+    controller -> errors : handle domain exception
+    errors --> api : 409 problem+json {code, detail}
+    api --> app : ApiError
+    app -> staff : show error banner\nstock stays unchanged
   else every line fits
-    vm -> state : stock += quantity
-    vm --> ctrl : MachineView (new stock)
-    ctrl --> ui : 200 MachineView
-    ui -> staff : green banner "Machine refilled."
+    machine -> machine : stock += quantity
+    machine --> service : MachineView
+    service --> controller
+    controller --> api : 200 MachineView
+    api --> app : validated new state
+    app -> staff : show refilled notice and stock
   end
 end
 
 == afterwards ==
-note over vm, state
-  Refilled units are ordinary stock:
-  customers can buy them, unitsSold
-  stays untouched by refills.
+note over machine
+Refilling changes stock only.
+It does not change units sold or revenue.
+Customers can buy the new stock later.
 end note
 @enduml

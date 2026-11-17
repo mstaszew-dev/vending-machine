@@ -51,6 +51,106 @@ describe('CustomerView', () => {
     expect(onSetQuantity).toHaveBeenCalledWith(machine.products[0], 1)
   })
 
+  it('removes one unit when the customer clicks minus on a product card', async () => {
+    const user = userEvent.setup()
+    const onSetQuantity = vi.fn()
+    const machine = makeMachineState()
+    const cart = [{ productId: machine.products[0]!.id, quantity: 1 }]
+
+    render(
+      <CustomerView
+        machine={machine}
+        cart={cart}
+        busy={false}
+        onSetQuantity={onSetQuantity}
+        onInsertCoin={noop}
+        onReturnCredit={noop}
+        onPay={noop}
+      />,
+    )
+
+    const products = screen.getByRole('region', { name: 'Products' })
+    const productCard = within(products)
+      .getByText('Balea shower gel')
+      .closest('.product-card')
+    if (!(productCard instanceof HTMLElement)) {
+      throw new Error('Balea shower gel product card was not rendered')
+    }
+    await user.click(
+      within(productCard).getByRole('button', {
+        name: 'Remove one Balea shower gel',
+      }),
+    )
+
+    expect(onSetQuantity).toHaveBeenCalledWith(machine.products[0], 0)
+  })
+
+  it('changes the quantity from the cart line controls', async () => {
+    const user = userEvent.setup()
+    const onSetQuantity = vi.fn()
+    const machine = makeMachineState({ credit: 2 })
+    const product = machine.products[0]!
+
+    render(
+      <CustomerView
+        machine={machine}
+        cart={[{ productId: product.id, quantity: 1 }]}
+        busy={false}
+        onSetQuantity={onSetQuantity}
+        onInsertCoin={noop}
+        onReturnCredit={noop}
+        onPay={noop}
+      />,
+    )
+
+    const cart = screen.getByRole('complementary', { name: 'Shopping cart' })
+    await user.click(
+      within(cart).getByRole('button', { name: 'Remove one Balea shower gel' }),
+    )
+    await user.click(
+      within(cart).getByRole('button', { name: 'Add one Balea shower gel' }),
+    )
+
+    expect(onSetQuantity.mock.calls).toEqual([
+      [product, 0],
+      [product, 2],
+    ])
+  })
+
+  it('disables customer actions while a machine request is running', () => {
+    const machine = makeMachineState({ credit: 2 })
+    const product = machine.products[0]!
+
+    render(
+      <CustomerView
+        machine={machine}
+        cart={[{ productId: product.id, quantity: 1 }]}
+        busy
+        onSetQuantity={noop}
+        onInsertCoin={noop}
+        onReturnCredit={noop}
+        onPay={noop}
+      />,
+    )
+
+    const products = screen.getByRole('region', { name: 'Products' })
+    expect(
+      within(products).getByRole('button', {
+        name: 'Add one Balea shower gel',
+      }),
+    ).toBeDisabled()
+    const cart = screen.getByRole('complementary', { name: 'Shopping cart' })
+    expect(
+      within(cart).getByRole('button', { name: 'Remove one Balea shower gel' }),
+    ).toBeDisabled()
+    expect(
+      within(cart).getByRole('button', { name: 'Add one Balea shower gel' }),
+    ).toBeDisabled()
+    expect(
+      within(cart).getByRole('button', { name: 'Return coins' }),
+    ).toBeDisabled()
+  })
+
   it('blocks sold out products', () => {
     const machine = makeMachineState({
       products: [
