@@ -1,8 +1,8 @@
 /**
  * Root component and owner of all UI state: the active tab, the machine state and
- * the cart. Two tabs share one state document: Customer (buy, insert coins) and
- * Staff (revenue, refill). Every mutation returns the new state from the backend,
- * so App is the only place that talks to the API and both views stay dumb.
+ * the cart. Customer and Staff share one state document; Monitoring owns its own
+ * telemetry data because it talks to a different API surface. Every machine mutation
+ * returns the new state from the backend, so App is the only place that talks to it.
  */
 import { useEffect, useState } from 'react'
 import * as api from './api'
@@ -10,10 +10,11 @@ import { describeError } from './api'
 import { EMPTY_CART, setQuantity, type CartLine } from './cart'
 import { CustomerView } from './components/CustomerView'
 import { StaffView } from './components/StaffView'
+import { MonitoringTab } from './monitoring/MonitoringTab'
 import { formatEuro } from './money'
 import type { MachineState, Product } from './types'
 
-type Tab = 'customer' | 'staff'
+type Tab = 'customer' | 'staff' | 'monitoring'
 
 function App() {
   const [tab, setTab] = useState<Tab>('customer')
@@ -109,6 +110,14 @@ function App() {
     })
   }
 
+  function collect() {
+    void perform(async () => {
+      const state = await api.collect()
+      setNotice('Coin box collected.')
+      return state
+    })
+  }
+
   return (
     <div className="app">
       <header className="app__header">
@@ -142,6 +151,14 @@ function App() {
             >
               Staff
             </button>
+            <button
+              type="button"
+              className={`tab${tab === 'monitoring' ? ' tab--active' : ''}`}
+              aria-current={tab === 'monitoring' ? 'page' : undefined}
+              onClick={() => setTab('monitoring')}
+            >
+              Monitoring
+            </button>
           </nav>
           <button
             type="button"
@@ -166,13 +183,12 @@ function App() {
       )}
 
       <main className="app__main">
-        {!machine ? (
+        {tab === 'monitoring' ? (
+          <MonitoringTab />
+        ) : !machine ? (
           <section className="empty-state">
             <h2>Connecting to the machine…</h2>
-            <p>
-              The backend answers on port 8080. Start it with{' '}
-              <code>./mvnw spring-boot:run</code> and retry.
-            </p>
+            <p>Start the configured backend and retry.</p>
             <button
               type="button"
               className="button button--primary"
@@ -193,7 +209,12 @@ function App() {
             onPay={pay}
           />
         ) : (
-          <StaffView machine={machine} busy={busy} onRefill={refill} />
+          <StaffView
+            machine={machine}
+            busy={busy}
+            onRefill={refill}
+            onCollect={collect}
+          />
         )}
       </main>
 

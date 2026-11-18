@@ -1,0 +1,65 @@
+@startuml metrics-pipeline
+' Telemetry is fail-open: the domain emits points into a bounded buffer, and a separate
+' flush loop writes them to InfluxDB. Reads are SQL over the v3 query API.
+title Metrics pipeline - write, read and boot warm-up
+
+skinparam activityBackgroundColor #eef3fa
+
+start
+:Machine or simulator action;
+if (guard accepts?) then (no)
+  :record insert_rejected / alert;
+  :publish over SSE;
+else (yes)
+  :mutate in-memory state;
+endif
+:MetricsService.event() / .recordTemperature();
+:MetricsWriter.record(db, point);
+note right
+  Queue cap 1,000 points.
+  Overflow drops the OLDEST point
+  and increments droppedPoints.
+end note
+if (queue full?) then (yes)
+  :drop oldest, count it;
+endif
+:queue holds point;
+fork
+  :flush every 500 ms or 100 points;
+  if (breaker.allow()?) then (no)
+    :count skippedFlush;
+  else (yes)
+    :encode line protocol;
+    :POST /api/v3/write_lp?no_sync=true;
+    if (write ok?) then (yes)
+      :recordSuccess;
+    else (no)
+      :recordFailure;
+      note right
+        3 consecutive failures open the
+        breaker for 10 s. Never blocks
+        a purchase.
+      end note
+    endif
+  endif
+fork again
+  :GET summary / series / events;
+  :POST /api/v3/query_sql;
+  if (query ok?) then (yes)
+    :map rows to read model;
+  elseif (missing table on fresh DB)
+    :use zero coins / null temperature;
+  else (other failure)
+    :503 TSDB_UNAVAILABLE;
+  endif
+fork again
+  :boot: ensureDatabase(vitals, 1h);
+  :boot: ensureDatabase(events, 7d);
+  :replay last 60 s of coin_inserted;
+  :seed CoinLedger window;
+end fork
+
+:serve read model to REST + SSE;
+stop
+
+@enduml

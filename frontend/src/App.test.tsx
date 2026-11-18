@@ -15,9 +15,15 @@ vi.mock('./api', async (importOriginal) => {
     purchase: vi.fn(),
     returnCredit: vi.fn(),
     refill: vi.fn(),
+    collect: vi.fn(),
     describeError: actual.describeError,
   }
 })
+
+// The monitoring tab owns its own data fetching; App only has to mount it.
+vi.mock('./monitoring/MonitoringTab', () => ({
+  MonitoringTab: () => <p>monitoring-tab-stub</p>,
+}))
 
 import * as api from './api'
 
@@ -26,6 +32,7 @@ const mockedInsertCredit = vi.mocked(api.insertCredit)
 const mockedReturnCredit = vi.mocked(api.returnCredit)
 const mockedPurchase = vi.mocked(api.purchase)
 const mockedRefill = vi.mocked(api.refill)
+const mockedCollect = vi.mocked(api.collect)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -51,7 +58,7 @@ describe('App', () => {
 
     expect(
       await screen.findByText(
-        'Cannot reach the machine. Is the backend running on port 8080?',
+        'Cannot reach the machine. Is the configured backend running?',
       ),
     ).toBeInTheDocument()
 
@@ -221,5 +228,37 @@ describe('App', () => {
 
     expect(screen.getByText('Restock slots')).toBeInTheDocument()
     expect(screen.getByText('Revenue')).toBeInTheDocument()
+  })
+
+  it('opens the monitoring tab without disturbing the machine view', async () => {
+    const user = userEvent.setup()
+    mockedGetMachine.mockResolvedValue(makeMachineState())
+
+    render(<App />)
+    await screen.findByText('Balea shower gel')
+
+    await user.click(screen.getByRole('button', { name: 'Monitoring' }))
+
+    expect(screen.getByText('monitoring-tab-stub')).toBeInTheDocument()
+    expect(screen.queryByText('Balea shower gel')).not.toBeInTheDocument()
+    expect(mockedGetMachine).toHaveBeenCalledTimes(1)
+  })
+
+  it('collects the coin box from the staff tab and shows the emptied box', async () => {
+    const user = userEvent.setup()
+    const filled = makeMachineState({ hopper: { inserted: 12.5, capacity: 50 } })
+    mockedGetMachine.mockResolvedValue(filled)
+    mockedCollect.mockResolvedValue(
+      makeMachineState({ hopper: { inserted: 0, capacity: 50 } }),
+    )
+
+    render(<App />)
+    await screen.findByText('Balea shower gel')
+
+    await user.click(screen.getByRole('button', { name: 'Staff' }))
+    await user.click(screen.getByRole('button', { name: 'Collect coins' }))
+
+    expect(await screen.findByText(/0,00 € of 50,00 €/)).toBeInTheDocument()
+    expect(mockedCollect).toHaveBeenCalledOnce()
   })
 })

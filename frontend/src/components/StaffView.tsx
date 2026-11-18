@@ -11,6 +11,8 @@ interface StaffViewProps {
   machine: MachineState
   busy: boolean
   onRefill: (items: { productId: number; quantity: number }[]) => void
+  /** Only the NestJS backend has a collectible coin box. */
+  onCollect?: () => void
 }
 
 interface RefillItem {
@@ -18,7 +20,7 @@ interface RefillItem {
   quantity: number
 }
 
-export function StaffView({ machine, busy, onRefill }: StaffViewProps) {
+export function StaffView({ machine, busy, onRefill, onCollect }: StaffViewProps) {
   // the raw input is kept as a string so typing feels normal, and only the value that is
   // actually sent is clamped to the free space of the slot
   const [amounts, setAmounts] = useState<Record<number, string>>({})
@@ -91,6 +93,50 @@ export function StaffView({ machine, busy, onRefill }: StaffViewProps) {
           <span className="stat__value">{formatEuro(machine.credit)}</span>
         </article>
       </section>
+
+      {machine.hopper ? (
+        <section className="panel" aria-label="Coin box">
+          <header className="panel__header">
+            <h2 className="panel__title">Coin box</h2>
+            {onCollect ? (
+              <button
+                type="button"
+                className="button button--primary"
+                disabled={busy || machine.hopper.inserted <= 0}
+                onClick={() => onCollect()}
+              >
+                Collect coins
+              </button>
+            ) : null}
+          </header>
+          <p className="panel__hint">
+            {formatEuro(machine.hopper.inserted)} of{' '}
+            {formatEuro(machine.hopper.capacity)} filled
+          </p>
+          <div
+            className="meter"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={machine.hopper.capacity}
+            aria-valuenow={machine.hopper.inserted}
+            aria-label="Coin box fill level"
+          >
+            <span
+              className="meter__fill"
+              style={{
+                width: `${
+                  machine.hopper.capacity > 0
+                    ? Math.min(
+                        100,
+                        (machine.hopper.inserted / machine.hopper.capacity) * 100,
+                      )
+                    : 0
+                }%`,
+              }}
+            />
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel">
         <header className="panel__header">

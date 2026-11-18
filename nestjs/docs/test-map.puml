@@ -1,0 +1,388 @@
+@startwbs
+* Verified behaviour - verbatim test names
+** Unit - pure logic, guards, adapters (173)
+*** src/catalog/catalog.spec.ts (4)
+**** contains the eight products from the task with exact prices
+**** assigns every product to a group
+**** finds products by id and exposes unique ids
+**** accepts exactly the euro coins from 5 cents to 2 euro
+*** src/config/app-config.spec.ts (4)
+**** provides demo defaults without any environment
+**** reads overrides from strings and converts euro limits to cents
+**** names the variable when a value is invalid
+**** parses byte sizes with and without a unit
+*** src/machine/coin-ledger.spec.ts (9)
+**** counts inserts and value inside the window
+**** drops entries older than the window
+**** allows an insert that reaches the limit exactly
+**** rejects the insert that would exceed the insert limit
+**** rejects the insert that would exceed the value limit
+**** forgets a burst once the window has passed
+**** seeds from history in any order without double counting
+**** keeps memory bounded by pruning on record
+**** clears on reset
+*** src/machine/dto.spec.ts (9)
+**** accepts a euro amount and keeps its decimals
+**** accepts zero and negative amounts, because the coin rule owns that decision
+**** rejects a missing amount with the Java validation wording
+**** rejects a body that is not an object
+**** parses cart positions
+**** rejects an empty or missing cart
+**** rejects a non-positive product id or quantity
+**** collects every field error in one message
+**** rejects malformed item shapes
+*** src/machine/machine.service.spec.ts (9)
+**** returns the machine view
+**** records an accepted coin and pushes it to the stream
+**** records a rejected coin with its code
+**** raises an alert when the rate guard rejects an insert
+**** records a returned credit as an event
+**** records a purchase with units and revenue
+**** does not record a purchase that the domain rejects
+**** records one refill event per position
+**** collects the hopper and tells the stream about it
+*** src/machine/money.spec.ts (6)
+**** converts a two-decimal amount to integer cents
+**** tolerates binary floating point noise within one micro-euro
+**** rejects amounts with more than two decimals
+**** rejects negative and non-finite amounts
+**** serialises cents back to a two-decimal euro number
+**** formats cents for humans
+*** src/machine/problem-details.spec.ts (5)
+**** maps every machine error code to the Java status
+**** turns a domain error into an RFC 9457 problem
+**** keeps the Java titles for the shared codes
+**** passes a request error through unchanged
+**** maps an unexpected exception to a generic 500 without leaking internals
+*** src/machine/vending-machine.spec.ts (21)
+**** starts with eight slots, configured stock and capacity
+**** adds an accepted coin to credit and to the hopper
+**** rejects a coin the machine does not accept without side effects
+**** rejects an insert that would overflow the hopper
+**** rejects a burst above the rolling insert limit
+**** accepts coins again after the window has passed
+**** rejects a burst above the rolling value limit
+**** returns the inserted credit on cancel
+**** returns zero when there is nothing to return
+**** sells products and returns change
+**** rejects a cart with an unknown product
+**** rejects quantity 0
+**** rejects quantity -1
+**** rejects quantity 1.5
+**** rejects an empty cart
+**** rejects a cart that asks for more than the stock, changing nothing
+**** rejects a purchase the credit does not cover, changing nothing
+**** refills up to the slot capacity
+**** refills all or nothing
+**** collects the hopper without touching credit
+**** keeps an accept/reject history of the window in the view
+*** src/metrics/circuit-breaker.spec.ts (6)
+**** stays closed while writes succeed
+**** opens after the configured number of consecutive failures
+**** lets one probe through after the cooldown
+**** closes on a successful probe
+**** reopens immediately when the probe fails
+**** resets the failure count after a success
+*** src/metrics/influx-store.spec.ts (12)
+**** writes line protocol to the v3 write endpoint without blocking on fsync
+**** skips the request when there is nothing to write
+**** reports the status and a body excerpt when a write fails
+**** queries SQL through the v3 query endpoint
+**** classifies a missing measurement on HTTP 400 as a missing relation
+**** reports a query failure with the database name
+**** keeps a 404 that does not name a relation as a plain query failure
+**** creates a database with its immutable retention period
+**** treats an existing database as success
+**** fails when the database cannot be created for another reason
+**** pings the health endpoint
+**** reports an unreachable server as down instead of throwing
+*** src/metrics/line-protocol.spec.ts (8)
+**** encodes tags, numeric fields and booleans as line protocol
+**** omits the tag section when there are no tags
+**** escapes separators in measurement, tag keys and tag values
+**** escapes quotes and backslashes in string fields
+**** rejects a point without fields
+**** rejects an empty measurement and non-finite field values
+**** rejects an empty tag value instead of writing a broken line
+**** joins a batch with newlines
+*** src/metrics/metrics-service.spec.ts (17)
+**** uses the configured coin window for the summary and warm-up queries
+**** records a coin insert as a durable event
+**** records a rejected insert with its code
+**** records a purchase with units and revenue
+**** records one refill point per product position
+**** records credit returns and hopper collections
+**** records an alert as an event
+**** records a temperature sample in the vitals database
+**** reads the rolling coin window from the events database
+**** treats an empty aggregate row as zero
+**** reads the latest temperature and maps its timestamp
+**** reads Influx timestamps without a zone as UTC, not as local time
+**** returns null when no temperature has been stored
+**** maps a temperature series to points
+**** reads recent events newest first
+**** reads the boot history of coin inserts
+**** propagates query failures so the controller can answer 503
+*** src/metrics/metrics-writer.spec.ts (9)
+**** buffers points and writes them on flush
+**** groups a flush by database
+**** drops the oldest point when the queue is full and counts it
+**** sends large batches in slices of the configured size
+**** counts written points and clears the queue
+**** drops a failed batch, counts it and opens the breaker
+**** shares one in-flight flush instead of starting overlapping writes
+**** never throws from record, even with a broken clock
+**** flushes on its own interval once started
+*** src/metrics/size-guard.spec.ts (5)
+**** sums nested files of the data directory
+**** treats a missing directory as empty
+**** reports ok below eighty percent of the budget
+**** warns at eighty percent of the budget
+**** reports exceeded at the budget
+*** src/metrics/temperature-service.spec.ts (6)
+**** records and streams one sample per tick
+**** raises one alert after three consecutive excursion samples
+**** does not repeat the alert while the excursion continues
+**** samples on its interval once started and stops on stop
+**** does not sample when the simulation is disabled
+**** turns an excursion request into a bounded window
+*** src/metrics/temperature-simulator.spec.ts (5)
+**** is deterministic for a given seed
+**** keeps a normal sample inside the cabinet band
+**** switches the compressor on above the setpoint and off below it
+**** leaves the band during a requested excursion and recovers afterwards
+**** marks the excursion in the sample so the alert path can see it
+*** src/metrics/time-series.spec.ts (5)
+**** recognises a typed missing-relation error
+**** recognises a relation-specific provider message
+**** recognises a standalone no-such-table message
+**** does not classify a vague not-found message as a missing relation
+**** does not classify an unrelated failure that mentions not found
+*** src/metrics/vitals-monitor.spec.ts (9)
+**** stays quiet while the cabinet is inside its band
+**** raises TEMP_HIGH only after three consecutive samples above the band
+**** raises TEMP_LOW only after three consecutive samples below the band
+**** does not repeat the alert while the excursion continues
+**** rearms only after the cabinet is back inside the band
+**** breaks a run when a single in-band sample appears in the middle
+**** switches direction without a stale counter
+**** clears the active alert when the cabinet recovers
+**** ignores non-finite samples instead of alerting on them
+*** src/monitoring/monitoring-stream.spec.ts (5)
+**** delivers published events to every subscriber
+**** stops delivering after unsubscribe
+**** keeps a bounded history for late subscribers
+**** survives a subscriber that throws
+**** reports the subscriber count
+*** src/monitoring/monitoring.service.spec.ts (15)
+**** describes available signals, retention and database health
+**** reports an unreachable database without failing the capability probe
+**** combines live machine state with stored telemetry
+**** answers 503 TSDB_UNAVAILABLE when the summary query fails
+**** treats a missing event table on a fresh database as an empty coin window
+**** treats a missing measurement as empty series and events
+**** returns a temperature series for a range
+**** returns a coin rate series and rejects an unknown signal
+**** rejects a range that is not a positive number of milliseconds
+**** returns recent events with a bounded limit
+**** reports the last alert seen on the stream
+**** turns a flood request into guarded inserts and reports the outcome
+**** gives every flood insert a distinct timestamp so Influx keeps all of them
+**** caps the flood size
+**** delegates an excursion request to the temperature service
+*** src/monitoring/range.spec.ts (4)
+**** parses the minute, hour and second forms the UI uses
+**** treats a bare number as seconds
+**** rejects missing, malformed and zero ranges
+**** caps a range at six hours
+** Integration - supertest + fake port (38)
+*** test/bootstrap.int-spec.ts (3)
+**** creates both databases with their immutable retention
+**** warms the coin window from the durable event log
+**** boots even when the database cannot answer
+*** test/health.int-spec.ts (3)
+**** reports liveness
+**** reports readiness together with the database state
+**** stays ready when only the database is down
+*** test/machine-api.int-spec.ts (15)
+**** answers the Java machine shape
+**** accepts a coin and reflects it in credit and hopper
+**** answers an invalid coin with a 400 problem and a stable code
+**** answers a missing amount with the Java validation wording
+**** answers malformed JSON as an INVALID_REQUEST problem
+**** sells a cart and returns change
+**** rejects a cart that exceeds stock with 409 INSUFFICIENT_STOCK
+**** rejects a purchase the credit does not cover with 409 INSUFFICIENT_CREDIT
+**** answers an unknown product with 404 UNKNOWN_PRODUCT
+**** rejects an empty cart with 400 VALIDATION_ERROR
+**** refills and rejects an overflow with 409 SLOT_CAPACITY_EXCEEDED
+**** returns inserted credit
+**** trips the rolling coin guard on the twenty-first insert
+**** rejects an insert that would overflow the hopper
+**** empties the hopper through the staff collect endpoint
+*** test/monitoring-api.int-spec.ts (14)
+**** advertises the signals and retention of the NestJS backend
+**** reports the database as unreachable without failing the probe
+**** summarises temperature, coins and machine state
+**** answers 503 TSDB_UNAVAILABLE when the database cannot answer
+**** serves a temperature series
+**** rejects an unknown signal and a malformed range
+**** serves recent events with a limit
+**** rejects a non-positive event limit
+**** drives a coin flood through the real guard
+**** rejects a flood count that is not a number
+**** starts a temperature excursion
+**** rejects an excursion with a non-positive duration
+**** rejects a simulate call without a body
+**** streams vitals as server-sent messages with a replay buffer
+*** test/real-influx.int-spec.ts (3)
+**** answers a health probe
+**** writes line protocol and reads it back through the SQL endpoint
+**** accepts the database creation twice
+** End-to-end - real backend + InfluxDB + browser (14)
+*** e2e/vending.spec.ts (14)
+**** serves the catalogue with the shared contract
+**** buys a product for coins and returns the change
+**** returns inserted credit in coins
+**** rejects a purchase without credit as an RFC 9457 problem
+**** rejects a coin the machine does not accept
+**** rejects a refill that tries to overfill a slot
+**** the flood demo trips the rate guard and keeps every accepted insert
+**** collecting the coin box empties it and logs the handover
+**** reports the capabilities and the storage budget
+**** summarises the fridge, the coins and the machine
+**** returns the temperature and coin-rate series
+**** reports the rejected inserts and the alerts as business events
+**** raises a temperature alert after a simulated excursion
+**** shows the live telemetry in the browser
+** Frontend - monitoring UI + shared contract (117)
+*** ../frontend/src/App.test.tsx (12)
+**** renders the machine state on first load
+**** shows an error banner and a retry path when the backend is unreachable
+**** keeps the current machine state when reload fails
+**** inserts a coin and switches to the new credit the backend reports
+**** surfaces a backend rejection as a problem banner without changing the state
+**** pays for the cart, shows the change and empties the cart
+**** keeps the cart and reports a rejected purchase
+**** returns inserted credit and refreshes the displayed machine state
+**** refills a slot from the staff tab and reports it
+**** shows the staff statistics when the staff tab is selected
+**** opens the monitoring tab without disturbing the machine view
+**** collects the coin box from the staff tab and shows the emptied box
+*** ../frontend/src/api.test.ts (13)
+**** loads and validates the machine state
+**** sends a coin amount and parses the updated state
+**** returns the credited amount from the refund endpoint
+**** sends purchase lines and parses the receipt
+**** sends refill lines and parses the new machine state
+**** collects the coin box and parses the new machine state
+**** preserves the server message, status, and stable code on HTTP errors
+**** uses the HTTP status when an error body is not valid JSON
+**** converts an invalid successful response into a machine API error
+**** does not disguise invalid JSON from a successful response
+**** turns request timeouts into a gateway timeout error
+**** leaves other network errors intact for the UI to describe
+**** describes API, generic, and non-error failures
+*** ../frontend/src/cart.test.ts (6)
+**** converts prices to integer cents without float drift
+**** adds a product once and increases an existing line
+**** never lets the cart hold more units than the slot
+**** removes the line when the quantity drops to zero
+**** keeps the order of lines and ignores unknown products when totalling
+**** only allows paying when the inserted credit covers the total
+*** ../frontend/src/monitoring/MonitoringTab.test.tsx (5)
+**** explains the missing routes on the Java backend
+**** renders the monitoring view once the documents arrive
+**** shows the probe error and offers a retry
+**** shows a probing state while the capability probe is in flight
+**** recovers when the retry probe succeeds
+*** ../frontend/src/monitoring/MonitoringView.test.tsx (10)
+**** shows the latest temperature and the coin box fill level
+**** draws one chart per signal
+**** shows the storage budget and the live indicator
+**** falls back to polling when the stream is down
+**** raises the alert pill when the machine reported one
+**** shows a placeholder before the first temperature sample arrives
+**** runs both demo actions with their defaults
+**** disables the demo actions while a request runs
+**** lists the recent machine events
+**** keeps the action error visible
+*** ../frontend/src/monitoring/api.test.ts (11)
+**** probes the capability document
+**** returns null when the backend has no monitoring endpoints
+**** keeps a non-404 probe failure as a problem
+**** loads the monitoring summary
+**** builds the series query with the requested range
+**** loads recent events with a limit
+**** posts the flood count and parses the outcome
+**** posts the excursion duration
+**** converts an invalid successful response into an ApiError
+**** reports the HTTP status when an error body is not JSON
+**** turns a hung request into a 504 after the timeout
+*** ../frontend/src/monitoring/chart.test.ts (5)
+**** maps the series across the inner width and flips the y axis
+**** keeps a flat series visible by widening the domain
+**** returns an empty path and a safe domain for no points
+**** sizes bars against the biggest bucket
+**** returns no bars for an empty series
+*** ../frontend/src/monitoring/format.test.ts (4)
+**** prints temperatures and counts in German notation
+**** scales the storage budget through B, KB and MB
+**** formats a clock time and keeps an unparsable stamp readable
+**** re-exports the money formatter
+*** ../frontend/src/monitoring/useMonitoring.test.ts (12)
+**** loads every document for the monitoring tab
+**** reports an unsupported backend when the capability probe answers 404
+**** keeps a probe failure as an error state
+**** runs the coin flood demo with its default count and refreshes
+**** runs the excursion demo with its default duration
+**** keeps a demo failure visible without dropping the tab
+**** marks the tab as polling when the browser has no EventSource
+**** re-runs the capability probe when the operator retries
+**** applies temperature samples and machine events as they stream in
+**** raises the alert from the stream
+**** stops polling when the event stream reconnects
+**** ignores malformed stream payloads and falls back to polling on error
+*** ../frontend/src/monitoring/validation.test.ts (12)
+**** parses a capability document
+**** accepts every storage level the NestJS size guard emits
+**** rejects a capability document with an unknown size level
+**** rejects a capability document without signals
+**** parses a summary with a temperature reading
+**** parses a summary without a temperature reading
+**** parses an alert with its optional temperature
+**** rejects a summary with a non-numeric temperature
+**** parses a series and rejects non-finite points
+**** rejects a series with an unknown signal
+**** parses events with optional code and product id
+**** parses the flood result and keeps an optional code
+*** ../frontend/src/validation.test.ts (12)
+**** accepts the payload the backend actually sends
+**** rejects a product group the UI does not know
+**** rejects fractional stock and negative prices
+**** rejects a response that is not an object at all
+**** accepts the Java payload that has no hopper and no coin window
+**** parses the NestJS hopper and coin window when present
+**** rejects a hopper that is not a pair of positive numbers
+**** rejects a coin window without a window length
+**** maps a full purchase receipt
+**** rejects a receipt with fractional quantity
+**** keeps the stable machine error code
+**** returns an empty object for a broken error body
+*** ../frontend/src/views.test.tsx (15)
+**** renders every product of the machine
+**** requests one more unit when the customer clicks plus
+**** removes one unit when the customer clicks minus on a product card
+**** changes the quantity from the cart line controls
+**** disables customer actions while a machine request is running
+**** blocks sold out products
+**** passes the clicked coin to the machine and shows the missing amount
+**** enables paying once the credit covers the cart
+**** fills every slot up to its capacity
+**** refills a single slot with the entered amount
+**** clamps a typed refill amount to the free space in the slot
+**** shows revenue and units sold
+**** shows the coin box only when the backend reports one
+**** asks to collect the coin box and disables the button while busy
+**** does not offer collecting an empty coin box
+@endwbs

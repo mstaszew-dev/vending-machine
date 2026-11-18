@@ -1,0 +1,51 @@
+@startuml sequence-coin-decision
+' One coin insert travels through two independent guards, then becomes an event.
+title Sequence - coin insert decision
+
+actor Customer
+participant "Frontend" as UI
+participant "MachineController" as Ctrl
+participant "MachineService" as Svc
+participant "VendingMachine" as M
+participant "CoinLedger\n(60 s)" as Ledger
+participant "MetricsWriter" as Writer
+participant "MonitoringStream" as Stream
+participant "InfluxDB events" as DB
+
+Customer -> UI : click 0.50 EUR
+UI -> Ctrl : POST /api/machine/credit {amount:0.50}
+Ctrl -> Svc : insertCredit(0.50)
+Svc -> M : insertCredit(0.50, now)
+M -> Ledger : guard(50 cents, now)
+
+alt rolling window exceeded (>20 inserts or >2500 cents)
+  Ledger --> M : reject COIN_RATE_EXCEEDED
+  M --> Svc : throw MachineError
+  Svc -> Writer : record insert_rejected + alert
+  Svc -> Stream : publish alert
+  Svc --> Ctrl : 409 problem+json, code COIN_RATE_EXCEEDED
+else hopper would exceed EUR 50
+  Ledger --> M : accept window
+  M --> M : hopperCents + 50 > 5000
+  M --> Svc : throw MachineError
+  Svc -> Writer : record insert_rejected (HOPPER_FULL)
+  Svc --> Ctrl : 409 problem+json, code HOPPER_FULL
+else accepted
+  Ledger --> M : accept window
+  M -> M : credit += 50, hopper += 50
+  M --> Svc : MachineView
+  Svc -> Writer : record coin_inserted
+  Svc -> Stream : publish machine_event + machine
+  Svc --> Ctrl : MachineView (200)
+end
+
+Ctrl --> UI : new machine state
+Writer -> DB : flush batch (async, 500 ms)
+
+note over Ledger, Writer
+  Money is integer cents internally;
+  the wire uses euros with two decimals.
+  Telemetry never blocks the answer.
+end note
+
+@enduml

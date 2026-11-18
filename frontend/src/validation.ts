@@ -95,6 +95,23 @@ function parseProduct(value: unknown): MachineState['products'][number] {
   }
 }
 
+function parseHopper(value: unknown): MachineState['hopper'] {
+  const record = asRecord(value, 'hopper')
+  return {
+    inserted: asMoney(record, 'inserted', 'hopper'),
+    capacity: asMoney(record, 'capacity', 'hopper'),
+  }
+}
+
+function parseCoinWindow(value: unknown): MachineState['coinWindow'] {
+  const record = asRecord(value, 'coinWindow')
+  return {
+    inserts: asInteger(record, 'inserts', 'coinWindow'),
+    value: asMoney(record, 'value', 'coinWindow'),
+    windowSeconds: asNumber(record, 'windowSeconds', 'coinWindow'),
+  }
+}
+
 export function parseMachineState(value: unknown): MachineState {
   const record = asRecord(value, 'machine')
   const products = asArray(record, 'products', 'machine').map(parseProduct)
@@ -104,11 +121,18 @@ export function parseMachineState(value: unknown): MachineState {
     }
     return coin
   })
+  // Both extras are optional: the Java backend answers without them, and the UI must keep
+  // working against either backend.
+  const hopper = record.hopper === undefined ? undefined : parseHopper(record.hopper)
+  const coinWindow =
+    record.coinWindow === undefined ? undefined : parseCoinWindow(record.coinWindow)
   return {
     credit: asMoney(record, 'credit', 'machine'),
     totalRevenue: asMoney(record, 'totalRevenue', 'machine'),
     products,
     acceptedCoins,
+    ...(hopper === undefined ? {} : { hopper }),
+    ...(coinWindow === undefined ? {} : { coinWindow }),
   }
 }
 

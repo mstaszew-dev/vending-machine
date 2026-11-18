@@ -32,6 +32,43 @@ describe('parseMachineState', () => {
     expect(() => parseMachineState(null)).toThrow(ShapeError)
     expect(() => parseMachineState('nope')).toThrow(ShapeError)
   })
+
+  it('accepts the Java payload that has no hopper and no coin window', () => {
+    const payload = JSON.parse(JSON.stringify(makeMachineState()))
+
+    const state = parseMachineState(payload)
+
+    expect(state.hopper).toBeUndefined()
+    expect(state.coinWindow).toBeUndefined()
+  })
+
+  it('parses the NestJS hopper and coin window when present', () => {
+    const payload = JSON.parse(JSON.stringify(makeMachineState()))
+    payload.hopper = { inserted: 6.5, capacity: 50 }
+    payload.coinWindow = { inserts: 3, value: 6, windowSeconds: 60 }
+
+    const state = parseMachineState(payload)
+
+    expect(state.hopper).toEqual({ inserted: 6.5, capacity: 50 })
+    expect(state.coinWindow).toEqual({ inserts: 3, value: 6, windowSeconds: 60 })
+  })
+
+  it('rejects a hopper that is not a pair of positive numbers', () => {
+    const negative = JSON.parse(JSON.stringify(makeMachineState()))
+    negative.hopper = { inserted: -1, capacity: 50 }
+    expect(() => parseMachineState(negative)).toThrow(/negative/)
+
+    const partial = JSON.parse(JSON.stringify(makeMachineState()))
+    partial.hopper = { inserted: 1 }
+    expect(() => parseMachineState(partial)).toThrow(ShapeError)
+  })
+
+  it('rejects a coin window without a window length', () => {
+    const payload = JSON.parse(JSON.stringify(makeMachineState()))
+    payload.coinWindow = { inserts: 1, value: 0.05 }
+
+    expect(() => parseMachineState(payload)).toThrow(/windowSeconds is not a number/)
+  })
 })
 
 describe('parsePurchaseResult', () => {

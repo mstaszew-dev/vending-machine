@@ -613,6 +613,258 @@ button {
   font-size: 0.86em;
 }
 
+/* Monitoring view */
+
+.monitoring {
+  display: grid;
+  gap: 20px;
+}
+
+.monitoring .form__error {
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.panel__hint {
+  margin: 0;
+  padding: 16px 18px;
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+}
+
+.health {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 2px;
+  margin: 0;
+  padding: 14px;
+}
+
+.health__item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f7f9fc;
+}
+
+.health__item dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+.health__item dd {
+  margin: 2px 0 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #eef3fa;
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.live::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+.live--on {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.alert-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid #f0b7b2;
+}
+
+.alert-banner__value {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 16px 18px 0;
+}
+
+.metric {
+  display: grid;
+  gap: 2px;
+}
+
+.metric__label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+.metric__value {
+  font-size: 1.3rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart {
+  margin: 0;
+  padding: 14px 18px 18px;
+}
+
+.chart__svg {
+  display: block;
+  width: 100%;
+  height: 160px;
+}
+
+.chart__axis {
+  stroke: var(--border);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart__reference {
+  stroke: var(--dm-yellow);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart__line {
+  stroke: var(--dm-blue);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart__bar {
+  fill: var(--dm-blue);
+  opacity: 0.75;
+}
+
+.chart__caption {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 8px;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+}
+
+.chart__value {
+  color: var(--ink);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.events__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 18px;
+  border-top: 1px solid var(--border);
+  font-size: 0.86rem;
+}
+
+.events__row:first-child {
+  border-top: 0;
+}
+
+.events__time {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.events__type {
+  font-weight: 700;
+}
+
+.events__value {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 18px 18px;
+}
+
+.meter {
+  height: 10px;
+  margin: 0 18px 18px;
+  border-radius: 999px;
+  background: #eef3fa;
+  overflow: hidden;
+}
+
+.meter__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--dm-blue), #2f7fd0);
+}
+
+.pill--ok {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.pill--warning {
+  background: #fff7e0;
+  color: #8a6100;
+}
+
+.pill--exceeded {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
 /* Footer */
 
 .app__footer {

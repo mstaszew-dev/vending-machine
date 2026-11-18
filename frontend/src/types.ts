@@ -22,6 +22,21 @@ export interface MachineState {
   products: Product[]
   acceptedCoins: number[]
   totalRevenue: number
+  /** Only the NestJS backend reports the coin box; the Java backend does not. */
+  hopper?: Hopper
+  /** Only the NestJS backend reports the rolling coin window. */
+  coinWindow?: CoinWindow
+}
+
+export interface Hopper {
+  inserted: number
+  capacity: number
+}
+
+export interface CoinWindow {
+  inserts: number
+  value: number
+  windowSeconds: number
 }
 
 export interface PurchaseResult {

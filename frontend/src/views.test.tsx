@@ -296,4 +296,45 @@ describe('StaffView', () => {
     expect(within(soldStat as HTMLElement).getByText('10')).toBeInTheDocument()
     expect(screen.getByText('5,50 €')).toBeInTheDocument()
   })
+
+  it('shows the coin box only when the backend reports one', () => {
+    const javaBacked = makeMachineState()
+    const { rerender } = render(
+      <StaffView machine={javaBacked} busy={false} onRefill={noop} />,
+    )
+
+    expect(screen.queryByText('Coin box')).not.toBeInTheDocument()
+
+    const nestBacked = makeMachineState({ hopper: { inserted: 12.5, capacity: 50 } })
+    rerender(<StaffView machine={nestBacked} busy={false} onRefill={noop} />)
+
+    expect(screen.getByText('Coin box')).toBeInTheDocument()
+    expect(screen.getByText(/12,50 €/)).toBeInTheDocument()
+    expect(screen.getByText(/50,00 €/)).toBeInTheDocument()
+  })
+
+  it('asks to collect the coin box and disables the button while busy', async () => {
+    const user = userEvent.setup()
+    const onCollect = vi.fn()
+    const machine = makeMachineState({ hopper: { inserted: 12.5, capacity: 50 } })
+
+    const { rerender } = render(
+      <StaffView machine={machine} busy={false} onRefill={noop} onCollect={onCollect} />,
+    )
+    await user.click(screen.getByRole('button', { name: 'Collect coins' }))
+    expect(onCollect).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <StaffView machine={machine} busy onRefill={noop} onCollect={onCollect} />,
+    )
+    expect(screen.getByRole('button', { name: 'Collect coins' })).toBeDisabled()
+  })
+
+  it('does not offer collecting an empty coin box', () => {
+    const machine = makeMachineState({ hopper: { inserted: 0, capacity: 50 } })
+
+    render(<StaffView machine={machine} busy={false} onRefill={noop} onCollect={noop} />)
+
+    expect(screen.getByRole('button', { name: 'Collect coins' })).toBeDisabled()
+  })
 })

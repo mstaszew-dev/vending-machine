@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  collect,
   describeError,
   getMachine,
   insertCredit,
@@ -98,6 +99,17 @@ describe('machine API client', () => {
     )
   })
 
+  it('collects the coin box and parses the new machine state', async () => {
+    const state = makeMachineState({ hopper: { inserted: 0, capacity: 50 } })
+    mockFetch.mockResolvedValueOnce(jsonResponse(state))
+
+    await expect(collect()).resolves.toEqual(state)
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/machine/collect',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
   it('preserves the server message, status, and stable code on HTTP errors', async () => {
     mockFetch.mockResolvedValueOnce(
       jsonResponse({ detail: 'Only one unit is left', code: 'INSUFFICIENT_STOCK' }, 409),
@@ -150,7 +162,7 @@ describe('machine API client', () => {
 
     await expect(getMachine()).rejects.toBe(failure)
     expect(describeError(failure)).toBe(
-      'Cannot reach the machine. Is the backend running on port 8080?',
+      'Cannot reach the machine. Is the configured backend running?',
     )
   })
 

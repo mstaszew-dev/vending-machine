@@ -1,0 +1,63 @@
+@startuml architecture
+' Runtime topology for the dm vending machine. One React build serves either backend;
+' the NestJS process is the only one with a time-series database.
+title dm vending machine - runtime architecture
+
+actor Operator
+actor Customer
+
+rectangle "Browser" as Browser {
+  [React app] as React
+  [Customer tab] as CustomerTab
+  [Staff tab] as StaffTab
+  [Monitoring tab] as MonitorTab
+}
+
+rectangle "Vite dev server :5173" as Vite {
+  [Proxy /api -> VITE_API_TARGET] as Proxy
+}
+
+rectangle "Java backend :8080" as Java {
+  [Spring Boot /api/machine] as JavaApi
+}
+
+rectangle "NestJS backend :8081" as Nest {
+  [Machine controller] as MachineApi
+  [Monitoring controller] as MonitorApi
+  [Domain + guards] as Domain
+  [Metrics writer] as Writer
+  [SSE stream] as Sse
+}
+
+database "InfluxDB 3 Core :8181" as Influx {
+  [vitals - 1h] as Vitals
+  [events - 7d] as Events
+}
+
+Operator --> StaffTab
+Customer --> CustomerTab
+React --> CustomerTab
+React --> StaffTab
+React --> MonitorTab
+CustomerTab --> Proxy
+StaffTab --> Proxy
+MonitorTab --> Proxy
+Proxy --> JavaApi : default target
+Proxy --> MachineApi : when VITE_API_TARGET=8081
+Proxy --> MonitorApi : when VITE_API_TARGET=8081
+MonitorApi --> Sse : text/event-stream
+MachineApi --> Domain
+MonitorApi --> Domain
+Domain --> Writer : business + simulated events
+Writer --> Influx : line protocol (no_sync)
+MonitorApi --> Vitals : SQL read
+MonitorApi --> Events : SQL read
+Sse ..> MonitorTab : vitals, alerts, events
+
+note bottom of Proxy
+  Capability probe: GET /api/monitoring/capabilities.
+  A Java 404 makes the Monitoring tab
+  explain that telemetry needs NestJS.
+end note
+
+@enduml

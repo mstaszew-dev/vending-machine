@@ -85,12 +85,20 @@ export function refill(
   })
 }
 
+/**
+ * Empties the coin box. Only the NestJS backend has this route; the staff view only shows
+ * the action when the machine state reports a hopper.
+ */
+export function collect(): Promise<MachineState> {
+  return request('/collect', parseMachineState, { method: 'POST' })
+}
+
 export function describeError(error: unknown): string {
   if (error instanceof ApiError) {
     return error.message
   }
   if (error instanceof TypeError) {
-    return 'Cannot reach the machine. Is the backend running on port 8080?'
+    return 'Cannot reach the machine. Is the configured backend running?'
   }
   return error instanceof Error ? error.message : 'Something went wrong'
 }

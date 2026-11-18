@@ -1,0 +1,138 @@
+@startuml backend-classes
+' Key classes of the NestJS backend, grouped by layer. Ports are interfaces so the
+' InfluxDB adapter can be faked in unit and integration tests.
+title NestJS backend - classes and ports
+
+package "HTTP layer" {
+  class MachineController {
+    +view()
+    +insertCredit(amount)
+    +returnCredit()
+    +purchase(items)
+    +refill(items)
+    +collect()
+  }
+  class MonitoringController {
+    +capabilities()
+    +summary()
+    +series(signal, range)
+    +events(limit)
+    +stream()
+    +simulateFlood(count)
+    +simulateExcursion(seconds)
+  }
+}
+
+package "Application services" {
+  class MachineService {
+    -machine: VendingMachine
+    -metrics: MetricsService
+    -stream: MonitoringStream
+    +insertCredit(amount, at?)
+    +purchase(items)
+    +collect()
+  }
+  class MonitoringService {
+    +capabilities()
+    +summary()
+    +series()
+    +events()
+    +subscribe(listener)
+  }
+  class TemperatureService {
+    +sample()
+    +beginExcursion(seconds)
+  }
+}
+
+package "Domain (pure)" {
+  class VendingMachine {
+    -slots: Slot[]
+    -creditCents: number
+    -hopperCents: number
+    -ledger: CoinLedger
+    +insertCredit(value, at?)
+    +purchase(lines)
+    +collect()
+    +view()
+  }
+  class CoinLedger <<ring buffer>> {
+    -inserts: CoinInsert[]
+    +guard(value, at)
+    +history(windowMs)
+    +seed(history)
+  }
+  class ProblemDetails <<RFC 9457>> {
+    +code: string
+    +status: number
+    +detail: string
+  }
+}
+
+package "Telemetry ports and adapters" {
+  interface TimeSeriesStore {
+    +write(db, points)
+    +query(db, sql)
+    +ensureDatabase(db, retention)
+    +ping()
+  }
+  class InfluxStore <<adapter>> {
+    +write()
+    +query()
+  }
+  class MetricsService {
+    +recordCoinInsert()
+    +recordPurchase()
+    +recordHopperCollected()
+    +recordAlert()
+    +recordTemperature()
+    +coinWindowStats()
+  }
+  class MetricsWriter <<bounded queue>> {
+    -queue: QueuedPoint[]
+    +record(db, point)
+    +flush()
+    +stats()
+  }
+  class CircuitBreaker {
+    +allow()
+    +recordSuccess()
+    +recordFailure()
+  }
+  class SizeGuard {
+    +status()
+  }
+  class MonitoringStream {
+    -listeners: Set
+    -history: StreamEvent[]
+    +publish(event)
+    +subscribe(listener)
+  }
+}
+
+MachineController --> MachineService
+MonitoringController --> MonitoringService
+MonitoringController --> TemperatureService
+MachineService --> VendingMachine
+MachineService --> MetricsService
+MachineService --> MonitoringStream
+VendingMachine --> CoinLedger
+VendingMachine ..> ProblemDetails : throws
+MonitoringService --> MetricsService
+MonitoringService --> SizeGuard
+MonitoringService --> MonitoringStream
+TemperatureService --> MetricsService
+TemperatureService --> MonitoringStream
+MetricsService --> MetricsWriter
+MetricsWriter --> TimeSeriesStore
+MetricsWriter --> CircuitBreaker
+InfluxStore ..|> TimeSeriesStore
+
+note right of CoinLedger
+  60 s rolling window: >20 inserts or
+  >EUR 25 rejects with COIN_RATE_EXCEEDED.
+  Hopper capacity EUR 50 rejects with
+  HOPPER_FULL.
+end note
+
+@enduml

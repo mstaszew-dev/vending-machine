@@ -1,0 +1,55 @@
+@startuml sequence-monitoring-stream
+' The tab probes first, loads four read documents, then keeps them warm with SSE.
+' Polling every 5 s covers browsers without EventSource or a broken stream.
+title Sequence - monitoring tab and live stream
+
+actor Operator
+participant "MonitoringTab" as Tab
+participant "useMonitoring" as Hook
+participant "MonitoringController" as Ctrl
+participant "MonitoringService" as Svc
+participant "TemperatureService" as Temp
+participant "InfluxDB" as DB
+
+Operator -> Tab : open Monitoring tab
+Tab -> Hook : mount
+Hook -> Ctrl : GET /api/monitoring/capabilities
+
+alt Java backend (404)
+  Ctrl --> Hook : 404
+  Hook --> Tab : status = unsupported
+  Tab --> Operator : "needs the NestJS backend"
+else NestJS backend
+  Ctrl --> Hook : capabilities + tsdb budget
+  Hook -> Ctrl : GET summary, series x2, events (Promise.all)
+  Ctrl -> Svc : read model
+  Svc -> DB : SQL queries
+  DB --> Svc : rows
+  Svc --> Ctrl : documents
+  Ctrl --> Hook : documents
+  Hook --> Tab : status = ready, charts render
+  Hook -> Ctrl : EventSource /api/monitoring/stream
+  Ctrl -> Svc : subscribe(listener)
+
+  loop every 2 s when simulation is on
+    Temp -> Temp : drift temperature (+/- excursion)
+    Temp -> Svc : record sample, maybe alert
+    Svc -> DB : write vending point (async)
+    Svc --> Ctrl : vitals / alert event
+    Ctrl --> Hook : SSE data
+    Hook -> Hook : append point, update badge
+  end
+
+  loop every 5 s fallback
+    Hook -> Ctrl : GET summary + series + events
+    Ctrl --> Hook : fresh documents
+  end
+end
+
+note over Hook, Ctrl
+  EventSource payloads are parsed as untrusted JSON.
+  Malformed events are ignored; the last good
+  document stays on screen.
+end note
+
+@enduml
