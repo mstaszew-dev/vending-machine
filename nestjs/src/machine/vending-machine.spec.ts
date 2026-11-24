@@ -38,6 +38,16 @@ describe('VendingMachine', () => {
     expect(view.hopper).toEqual({ inserted: 0, capacity: 50 })
   })
 
+  it('clamps initial stock to the slot capacity', () => {
+    const view = machine(undefined, {
+      ...OPEN_LIMITS,
+      capacityPerSlot: 4,
+      initialStockPerSlot: 9,
+    }).view()
+
+    expect(view.products[0]).toMatchObject({ stock: 4, capacity: 4 })
+  })
+
   it('adds an accepted coin to credit and to the hopper', () => {
     const view = machine().insertCredit(50).view()
 
@@ -148,6 +158,40 @@ describe('VendingMachine', () => {
     expect(codeOf(() => subject.purchase([{ productId: 1, quantity }]))).toBe('INVALID_QUANTITY')
   })
 
+  it('purchase with duplicate lines that are within stock succeeds, returns one summed receipt item, and deducts stock once', () => {
+    const subject = machine()
+    subject.insertCredit(200)
+
+    const receipt = subject.purchase([
+      { productId: 1, quantity: 2 },
+      { productId: 1, quantity: 1 },
+    ])
+
+    expect(receipt.items).toEqual([
+      { productId: 1, name: 'Balea shower gel', quantity: 3, unitPrice: 0.55, lineTotal: 1.65 },
+    ])
+    expect(receipt.total).toBe(1.65)
+    expect(receipt.change).toBe(0.35)
+    expect(subject.view().products[0]).toMatchObject({ stock: 0, unitsSold: 3 })
+  })
+
+  it('rejects a summed quantity beyond Number.MAX_SAFE_INTEGER with INVALID_QUANTITY', () => {
+    const subject = machine()
+    subject.insertCredit(200).insertCredit(200).insertCredit(100)
+
+    expect(
+      codeOf(() =>
+        subject.purchase([
+          { productId: 1, quantity: Number.MAX_SAFE_INTEGER },
+          { productId: 1, quantity: 1 },
+        ]),
+      ),
+    ).toBe('INVALID_QUANTITY')
+
+    expect(subject.view().products[0]).toMatchObject({ stock: 3, unitsSold: 0 })
+    expect(subject.view().credit).toBe(5)
+  })
+
   it('rejects an empty cart', () => {
     expect(codeOf(() => machine().purchase([]))).toBe('INVALID_REQUEST')
   })
@@ -167,6 +211,24 @@ describe('VendingMachine', () => {
 
     expect(subject.view().credit).toBe(5)
     expect(subject.view().products[1]).toMatchObject({ stock: 3, unitsSold: 0 })
+  })
+
+  it('purchase with two lines for the same product rejects the combined quantity with INSUFFICIENT_STOCK and leaves stock/credit unchanged', () => {
+    const subject = machine()
+    subject.insertCredit(200).insertCredit(200).insertCredit(100)
+
+    expect(
+      codeOf(() =>
+        subject.purchase([
+          { productId: 1, quantity: 2 },
+          { productId: 1, quantity: 2 },
+        ]),
+      ),
+    ).toBe('INSUFFICIENT_STOCK')
+
+    expect(subject.view().products[0]).toMatchObject({ stock: 3, unitsSold: 0 })
+    expect(subject.view().credit).toBe(5)
+    expect(subject.view().totalRevenue).toBe(0)
   })
 
   it('rejects a purchase the credit does not cover, changing nothing', () => {
@@ -198,6 +260,21 @@ describe('VendingMachine', () => {
         subject.refill([
           { productId: 1, quantity: 1 },
           { productId: 2, quantity: 100 },
+        ]),
+      ),
+    ).toBe('SLOT_CAPACITY_EXCEEDED')
+
+    expect(subject.view().products[0]?.stock).toBe(3)
+  })
+
+  it('refill with two lines for the same product rejects the combined quantity with SLOT_CAPACITY_EXCEEDED and leaves stock unchanged', () => {
+    const subject = machine()
+
+    expect(
+      codeOf(() =>
+        subject.refill([
+          { productId: 1, quantity: 4 },
+          { productId: 1, quantity: 4 },
         ]),
       ),
     ).toBe('SLOT_CAPACITY_EXCEEDED')

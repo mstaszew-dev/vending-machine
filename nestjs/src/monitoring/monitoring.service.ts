@@ -58,6 +58,8 @@ const MAX_FLOOD = 200
  */
 export class MonitoringService {
   private alert: StreamAlert | null = null
+  private tsdbDown = false
+  private recoveryPublished = false
 
   constructor(
     private readonly metrics: MetricsService,
@@ -221,27 +223,70 @@ export class MonitoringService {
 
   private async coinWindowOrFail(): Promise<CoinWindowStats> {
     try {
-      return await this.metrics.coinWindowStats()
+      const stats = await this.metrics.coinWindowStats()
+      this.tsdbSuccess()
+      return stats
     } catch (error) {
       // A brand-new database has no event table yet. That is an empty coin window,
       // not an outage; the in-memory ledger still enforces the guard. Any other
       // failure is a real TSDB problem and must stay visible as 503.
       if (isMissingRelation(error)) {
+        this.tsdbSuccess()
         return { inserts: 0, cents: 0 }
       }
+      this.reportUnavailable()
       throw this.unavailable()
     }
   }
 
   private async queryOrFail<T>(query: () => Promise<T>, emptyWhenMissing: T): Promise<T> {
     try {
-      return await query()
+      const result = await query()
+      this.tsdbSuccess()
+      return result
     } catch (error) {
       // A first boot has no measurement tables yet. Charts and the event feed should start
       // empty, not in an error state; every other failure stays a visible 503.
-      if (isMissingRelation(error)) return emptyWhenMissing
+      if (isMissingRelation(error)) {
+        this.tsdbSuccess()
+        return emptyWhenMissing
+      }
+      this.reportUnavailable()
       throw this.unavailable()
     }
+  }
+
+  /**
+   * The single owner of the outage transition. Boot warm-up and query failures both come
+   * through here, so one outage raises one alert no matter who noticed it first.
+   */
+  reportUnavailable(
+    at = this.clock(),
+    message = 'Time-series database unavailable, machine operations are unaffected',
+  ): void {
+    if (this.tsdbDown) return
+    this.metrics.recordAlert('TSDB_UNAVAILABLE', at)
+    this.stream.publish({
+      kind: 'alert',
+      data: { code: 'TSDB_UNAVAILABLE', at, message },
+    })
+    this.tsdbDown = true
+    this.recoveryPublished = false
+  }
+
+  /** Announce the return to health once, so the stream shows a transition rather than a repeat. */
+  private tsdbSuccess(): void {
+    if (!this.tsdbDown || this.recoveryPublished) return
+    this.recoveryPublished = true
+    this.tsdbDown = false
+    this.stream.publish({
+      kind: 'alert',
+      data: {
+        code: 'TSDB_RECOVERED',
+        at: this.clock(),
+        message: 'Time-series database recovered',
+      },
+    })
   }
 
   private unavailable(): RequestError {

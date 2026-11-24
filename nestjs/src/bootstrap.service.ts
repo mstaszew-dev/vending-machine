@@ -6,6 +6,7 @@ import { MetricsWriter } from './metrics/metrics-writer'
 import { TemperatureService } from './metrics/temperature-service'
 import { isMissingRelation, type TimeSeriesStore } from './metrics/time-series'
 import { VendingMachine } from './machine/vending-machine'
+import { MonitoringService } from './monitoring/monitoring.service'
 import { APP_CONFIG, TIME_SERIES_STORE } from './tokens'
 
 /**
@@ -24,6 +25,7 @@ export class BootstrapService implements OnApplicationBootstrap, OnApplicationSh
     private readonly metrics: MetricsService,
     private readonly writer: MetricsWriter,
     private readonly temperature: TemperatureService,
+    private readonly monitoring: MonitoringService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -67,6 +69,10 @@ export class BootstrapService implements OnApplicationBootstrap, OnApplicationSh
         // a brand-new database has no table yet, which is expected on first boot
         this.logger.log('no coin history yet, the rate window starts empty')
       } else {
+        this.monitoring.reportUnavailable(
+          Date.now(),
+          'Time-series database unavailable while warming the coin window',
+        )
         this.logger.warn(`coin window warm-up skipped: ${String(error)}`)
       }
     }

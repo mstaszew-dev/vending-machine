@@ -84,7 +84,7 @@ export class VendingMachine {
   ) {
     this.slots = CATALOG.map((product) => ({
       product,
-      stock: options.initialStockPerSlot,
+      stock: Math.min(options.initialStockPerSlot, options.capacityPerSlot),
       unitsSold: 0,
     }))
     this.ledger = new CoinLedger(options.coinWindow, clock)
@@ -170,17 +170,17 @@ export class VendingMachine {
     if (lines.length === 0) {
       throw new MachineError('INVALID_REQUEST', 'Send at least one product position')
     }
-    for (const line of lines) {
-      const slot = this.slotFor(line)
-      if (slot.stock + line.quantity > this.options.capacityPerSlot) {
+    const requested = this.normalise(lines)
+    for (const { slot, quantity } of requested.values()) {
+      if (slot.stock + quantity > this.options.capacityPerSlot) {
         throw new MachineError(
           'SLOT_CAPACITY_EXCEEDED',
-          `Slot for '${slot.product.name}' holds ${this.options.capacityPerSlot} units, ${line.quantity} more would overflow`,
+          `Slot for '${slot.product.name}' holds ${this.options.capacityPerSlot} units, ${quantity} more would overflow`,
         )
       }
     }
-    for (const line of lines) {
-      this.slotFor(line).stock += line.quantity
+    for (const { slot, quantity } of requested.values()) {
+      slot.stock += quantity
     }
     return this
   }
@@ -227,20 +227,41 @@ export class VendingMachine {
     if (lines.length === 0) {
       throw new MachineError('INVALID_REQUEST', 'Send at least one product position')
     }
-    return lines.map((line) => {
-      const slot = this.slotFor(line)
-      if (slot.stock < line.quantity) {
+    return [...this.normalise(lines).values()].map(({ slot, quantity }) => {
+      if (slot.stock < quantity) {
         throw new MachineError(
           'INSUFFICIENT_STOCK',
-          `Only ${slot.stock} unit(s) of '${slot.product.name}' left, ${line.quantity} requested`,
+          `Only ${slot.stock} unit(s) of '${slot.product.name}' left, ${quantity} requested`,
         )
       }
       return {
         slot,
-        quantity: line.quantity,
-        lineTotalCents: slot.product.priceCents * line.quantity,
+        quantity,
+        lineTotalCents: slot.product.priceCents * quantity,
       }
     })
+  }
+
+  /** Sum repeated product lines before any validation, so a cart is checked as a whole. */
+  private normalise(lines: readonly LineRequest[]): Map<number, { slot: Slot; quantity: number }> {
+    const requested = new Map<number, { slot: Slot; quantity: number }>()
+    for (const line of lines) {
+      const slot = this.slotFor(line)
+      const existing = requested.get(line.productId)
+      const quantity = existing
+        ? this.addQuantities(existing.quantity, line.quantity)
+        : line.quantity
+      requested.set(line.productId, { slot, quantity })
+    }
+    return requested
+  }
+
+  private addQuantities(left: number, right: number): number {
+    const sum = left + right
+    if (!Number.isSafeInteger(sum)) {
+      throw new MachineError('INVALID_QUANTITY', 'Quantity is too large')
+    }
+    return sum
   }
 
   private slotFor(line: LineRequest): Slot {

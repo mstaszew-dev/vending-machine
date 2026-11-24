@@ -71,6 +71,74 @@ function cents(amount: number): number {
   return Math.round(amount * 100)
 }
 
+/** The backend replays its event buffer on every connect, so identity must be stable. */
+function eventKey(event: MonitoringEvent): string {
+  // Value and quantity distinguish distinct events sharing a millisecond timestamp.
+  return JSON.stringify([
+    event.at,
+    event.type,
+    event.value,
+    event.quantity,
+    event.code ?? null,
+    event.productId ?? null,
+  ])
+}
+
+interface StreamMachineView {
+  readonly credit: number
+  readonly totalRevenue: number
+  readonly products: readonly { readonly unitsSold: number }[]
+  readonly hopper: { readonly inserted: number; readonly capacity: number }
+  readonly coinWindow: { readonly inserts: number; readonly value: number }
+}
+
+/** Only the summary fields published by the backend are read from the SSE payload. */
+function readMachineView(value: unknown): StreamMachineView | null {
+  const payload = record(value)
+  if (payload === null) {
+    return null
+  }
+  const credit = payload['credit']
+  const totalRevenue = payload['totalRevenue']
+  if (typeof credit !== 'number' || typeof totalRevenue !== 'number') {
+    return null
+  }
+  const hopper = record(payload['hopper'])
+  const coinWindow = record(payload['coinWindow'])
+  if (hopper === null || coinWindow === null) {
+    return null
+  }
+  const inserted = hopper['inserted']
+  const capacity = hopper['capacity']
+  const inserts = coinWindow['inserts']
+  const windowValue = coinWindow['value']
+  if (
+    typeof inserted !== 'number' ||
+    typeof capacity !== 'number' ||
+    typeof inserts !== 'number' ||
+    typeof windowValue !== 'number' ||
+    !Array.isArray(payload['products'])
+  ) {
+    return null
+  }
+  const products: { readonly unitsSold: number }[] = []
+  for (const item of payload['products']) {
+    const product = record(item)
+    const unitsSold = product?.['unitsSold']
+    if (typeof unitsSold !== 'number') {
+      return null
+    }
+    products.push({ unitsSold })
+  }
+  return {
+    credit,
+    totalRevenue,
+    products,
+    hopper: { inserted, capacity },
+    coinWindow: { inserts, value: windowValue },
+  }
+}
+
 export function useMonitoring() {
   const [status, setStatus] = useState<MonitoringStatus>('probing')
   const [data, setData] = useState<MonitoringData | null>(null)
@@ -155,6 +223,12 @@ export function useMonitoring() {
         if (current === null) {
           return current
         }
+        // Replays are already reflected in the boot document; applying them twice
+        // would double-count coins and duplicate rows in the event list.
+        const key = eventKey(event)
+        if (current.events.some((existing) => eventKey(existing) === key)) {
+          return current
+        }
         const inserted = event.type === 'coin_inserted'
         const value = inserted ? cents(event.value) : 0
         return {
@@ -173,6 +247,36 @@ export function useMonitoring() {
                 },
               }
             : current.summary,
+        }
+      })
+    }
+
+    const applyMachine = (view: StreamMachineView) => {
+      setData((current) => {
+        if (current === null) {
+          return current
+        }
+        const unitsSold = view.products.reduce(
+          (total, product) => total + product.unitsSold,
+          0,
+        )
+        return {
+          ...current,
+          summary: {
+            ...current.summary,
+            coins: {
+              ...current.summary.coins,
+              hopperInserted: view.hopper.inserted,
+              hopperCapacity: view.hopper.capacity,
+              insertsLastMinute: view.coinWindow.inserts,
+              valueLastMinute: view.coinWindow.value,
+            },
+            machine: {
+              credit: view.credit,
+              totalRevenue: view.totalRevenue,
+              unitsSold,
+            },
+          },
         }
       })
     }
@@ -210,6 +314,14 @@ export function useMonitoring() {
           humidityPct: payload['humidityPct'],
           setpointC: payload['setpointC'],
         })
+      })
+      stream.addEventListener('machine', (message) => {
+        const view = readMachineView(readMessage(message))
+        if (view === null) {
+          return
+        }
+        markLive()
+        applyMachine(view)
       })
       stream.addEventListener('machine_event', (message) => {
         const payload = record(readMessage(message))

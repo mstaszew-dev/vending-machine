@@ -75,6 +75,10 @@ function setup() {
   return { store, writer, stream, machineService, service }
 }
 
+function alertCodes(stream: MonitoringStream): string[] {
+  return stream.recent(50).flatMap((event) => (event.kind === 'alert' ? [event.data.code] : []))
+}
+
 describe('MonitoringService', () => {
   it('describes available signals, retention and database health', async () => {
     const { service } = setup()
@@ -122,6 +126,54 @@ describe('MonitoringService', () => {
     expect(error).toBeInstanceOf(RequestError)
     expect((error as RequestError).code).toBe('TSDB_UNAVAILABLE')
     expect((error as RequestError).status).toBe(503)
+  })
+
+  it('raises one TSDB_UNAVAILABLE alert for repeated query failures', async () => {
+    const { store, stream, service } = setup()
+    store.failQueries = true
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const error = await service.series('temperature', 60_000).catch((caught: unknown) => caught)
+      expect((error as RequestError).code).toBe('TSDB_UNAVAILABLE')
+    }
+
+    expect(alertCodes(stream)).toEqual(['TSDB_UNAVAILABLE'])
+    expect(service.lastAlert()?.code).toBe('TSDB_UNAVAILABLE')
+  })
+
+  it('publishes a single recovery alert after queries succeed again', async () => {
+    const { store, stream, service } = setup()
+    store.failQueries = true
+    await expect(service.series('temperature', 60_000)).rejects.toBeInstanceOf(RequestError)
+
+    store.failQueries = false
+    store.rows = []
+    await service.series('temperature', 60_000)
+    await service.series('temperature', 60_000)
+
+    expect(alertCodes(stream)).toEqual(['TSDB_UNAVAILABLE', 'TSDB_RECOVERED'])
+
+    store.rows = [
+      { temperature_c: 5.4, setpoint_c: 6, humidity_pct: 41.2, time: '2026-11-18T10:00:00Z' },
+    ]
+    const summary = await service.summary()
+    expect(summary.alert).toMatchObject({
+      code: 'TSDB_RECOVERED',
+      message: expect.stringContaining('recovered') as unknown as string,
+    })
+  })
+
+  it('does not raise an alert for missing relations on a fresh database', async () => {
+    const { store, stream, service } = setup()
+    store.failQueries = true
+    store.missingTable = true
+    store.queryError = "Error during planning: table 'public.iox.vending' not found"
+
+    await service.summary()
+    await service.series('temperature', 60_000)
+    await service.events(50)
+
+    expect(alertCodes(stream)).toEqual([])
   })
 
   it('treats a missing event table on a fresh database as an empty coin window', async () => {

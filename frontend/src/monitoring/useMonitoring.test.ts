@@ -5,6 +5,7 @@ import * as api from './api'
 import { useMonitoring } from './useMonitoring'
 import type {
   MonitoringCapabilities,
+  MonitoringEvent,
   MonitoringSummary,
   SeriesResponse,
 } from './types'
@@ -56,6 +57,34 @@ const SUMMARY: MonitoringSummary = {
   alert: null,
   tsdb: TSDB,
   streamSubscribers: 1,
+}
+
+const MACHINE_VIEW = {
+  credit: 1.25,
+  totalRevenue: 3.75,
+  products: [
+    {
+      id: 1,
+      name: 'Cola',
+      group: 'drinks',
+      price: 1.25,
+      stock: 2,
+      capacity: 10,
+      unitsSold: 2,
+    },
+    {
+      id: 2,
+      name: 'Water',
+      group: 'drinks',
+      price: 0.75,
+      stock: 4,
+      capacity: 10,
+      unitsSold: 3,
+    },
+  ],
+  acceptedCoins: [0.5, 1],
+  hopper: { inserted: 4.5, capacity: 50 },
+  coinWindow: { inserts: 7, value: 2.5, windowSeconds: 60 },
 }
 
 const TEMPERATURE: SeriesResponse = {
@@ -330,5 +359,104 @@ describe('useMonitoring over server-sent events', () => {
 
     unmount()
     expect(source?.closed).toBe(true)
+  })
+
+  it('ignores a replayed coin event already present in the boot events document', async () => {
+    const replayed: MonitoringEvent = {
+      at: '2026-11-18T10:00:05.000Z',
+      type: 'coin_inserted',
+      value: 0.5,
+      quantity: 1,
+    }
+    vi.mocked(api.getEvents).mockResolvedValue({ events: [replayed] })
+
+    const { result } = renderHook(() => useMonitoring())
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    const source = FakeEventSource.instances[0]
+    expect(result.current.data?.events).toHaveLength(1)
+
+    // the backend replays its buffer on connect, and again on every reconnect
+    act(() => source?.emit('machine_event', replayed))
+    act(() => source?.emit('machine_event', replayed))
+
+    expect(result.current.data?.events).toHaveLength(1)
+    expect(result.current.data?.events[0]).toEqual(replayed)
+    expect(result.current.data?.summary.coins.insertsLastMinute).toBe(1)
+    expect(result.current.data?.summary.coins.valueLastMinute).toBe(0.5)
+    expect(result.current.data?.summary.coins.hopperInserted).toBe(0.5)
+    expect(api.getSummary).toHaveBeenCalledTimes(1)
+  })
+
+  it('applies an authoritative machine view from the stream without an HTTP refresh', async () => {
+    const { result } = renderHook(() => useMonitoring())
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+
+    act(() => FakeEventSource.instances[0]?.emit('machine', MACHINE_VIEW))
+
+    expect(result.current.data?.summary.machine).toEqual({
+      credit: 1.25,
+      totalRevenue: 3.75,
+      unitsSold: 5,
+    })
+    expect(result.current.data?.summary.coins.hopperInserted).toBe(4.5)
+    expect(result.current.data?.summary.coins.hopperCapacity).toBe(50)
+    expect(result.current.data?.summary.coins.insertsLastMinute).toBe(7)
+    expect(result.current.data?.summary.coins.valueLastMinute).toBe(2.5)
+    expect(api.getSummary).toHaveBeenCalledTimes(1)
+  })
+
+  it('still increments the summary for a genuinely new coin_inserted event', async () => {
+    const { result } = renderHook(() => useMonitoring())
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+
+    act(() =>
+      FakeEventSource.instances[0]?.emit('machine_event', {
+        at: '2026-11-18T10:00:06.000Z',
+        type: 'coin_inserted',
+        value: 0.5,
+        quantity: 1,
+      }),
+    )
+
+    expect(result.current.data?.events).toHaveLength(1)
+    expect(result.current.data?.events[0]?.type).toBe('coin_inserted')
+    expect(result.current.data?.summary.coins.insertsLastMinute).toBe(2)
+    expect(result.current.data?.summary.coins.valueLastMinute).toBe(1)
+    expect(result.current.data?.summary.coins.hopperInserted).toBe(1)
+  })
+
+  it('keeps distinct coins inserted in the same millisecond', async () => {
+    vi.mocked(api.getEvents).mockResolvedValue({
+      events: [
+        {
+          at: '2026-11-18T10:00:05.000Z',
+          type: 'coin_inserted',
+          value: 0.5,
+          quantity: 1,
+        },
+      ],
+    })
+
+    const { result } = renderHook(() => useMonitoring())
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    const source = FakeEventSource.instances[0]
+
+    const halfEuro = {
+      at: '2026-11-18T10:00:06.000Z',
+      type: 'coin_inserted',
+      value: 0.5,
+      quantity: 1,
+    }
+    const oneEuro = { ...halfEuro, value: 1 }
+
+    act(() => source?.emit('machine_event', halfEuro))
+    act(() => source?.emit('machine_event', oneEuro))
+
+    expect(result.current.data?.events).toHaveLength(3)
+    expect(result.current.data?.events).toContainEqual(halfEuro)
+    expect(result.current.data?.events).toContainEqual(oneEuro)
+    expect(result.current.data?.summary.coins.insertsLastMinute).toBe(3)
+    expect(result.current.data?.summary.coins.valueLastMinute).toBe(2)
+    expect(result.current.data?.summary.coins.hopperInserted).toBe(2)
   })
 })

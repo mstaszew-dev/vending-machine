@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { resolve } from 'node:path'
 
 /**
  * End-to-end suite against a real NestJS process and a real InfluxDB 3 database.
@@ -263,5 +265,83 @@ test.describe('monitoring tab', () => {
 
     const events = page.getByRole('list', { name: 'Recent machine events' })
     await expect(events.getByRole('listitem').first()).toBeVisible()
+  })
+})
+
+// A second process on its own port stands in for a restarted machine: it has a fresh
+// in-memory ledger, so the only way it can refuse a coin is the window warmed from the
+// shared events database. The main 8091 process and the dev servers are left untouched.
+const RESTART_PORT = 8092
+const RESTART_URL = `http://127.0.0.1:${RESTART_PORT}`
+
+async function waitForRestart(url: string, timeoutMs = 20_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${url}/health/ready`, {
+        signal: AbortSignal.timeout(2_000),
+      })
+      if (response.status === 200) return
+    } catch {
+      // the child is still starting, or its listener is not up yet
+    }
+    await new Promise((done) => setTimeout(done, 200))
+  }
+  throw new Error(`${url}/health/ready did not return 200 within ${timeoutMs}ms`)
+}
+
+async function stopRestart(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  const exited = new Promise<void>((done) => child.once('exit', () => done()))
+  child.kill('SIGTERM')
+  let timer: NodeJS.Timeout | undefined
+  try {
+    await Promise.race([
+      exited,
+      new Promise<void>((done) => {
+        timer = setTimeout(done, 5_000)
+      }),
+    ])
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL')
+      await exited
+    }
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
+test.describe('restart recovery', () => {
+  test('restart does not reset the coin window', async ({ request }) => {
+    // Populate the durable window through the main process. The flood endpoint flushes
+    // its events, so this works even when the test is run on its own.
+    const flood = await request.post('/api/monitoring/simulate/flood', {
+      data: { count: 25 },
+    })
+    expect(flood.status()).toBe(200)
+
+    const child = spawn(process.execPath, ['dist/main.js'], {
+      cwd: resolve(__dirname, '..'),
+      env: {
+        ...process.env,
+        PORT: String(RESTART_PORT),
+        INFLUX_URL: 'http://127.0.0.1:8181',
+        INFLUX_VITALS_DB: 'vitals_e2e',
+        INFLUX_EVENTS_DB: 'events_e2e',
+        TEMPERATURE_SIMULATION: 'false',
+      },
+      stdio: 'ignore',
+    })
+
+    try {
+      await waitForRestart(RESTART_URL)
+      const blocked = await request.post(`${RESTART_URL}/api/machine/credit`, {
+        data: { amount: 0.05 },
+      })
+      expect(blocked.status()).toBe(409)
+      expect((await blocked.json()).code).toBe('COIN_RATE_EXCEEDED')
+    } finally {
+      await stopRestart(child)
+    }
   })
 })

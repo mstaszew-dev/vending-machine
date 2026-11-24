@@ -116,6 +116,35 @@ describe('machine API', () => {
     expect(problem(response)).toMatchObject({ code: 'INSUFFICIENT_STOCK' })
   })
 
+  it('rejects a duplicate-line purchase with 409 INSUFFICIENT_STOCK and no state change', async () => {
+    await context.http().post('/api/machine/credit').send({ amount: 2 }).expect(200)
+    await context.http().post('/api/machine/credit').send({ amount: 1 }).expect(200)
+
+    const response = await context
+      .http()
+      .post('/api/machine/purchase')
+      .send({
+        items: [
+          { productId: 1, quantity: 2 },
+          { productId: 1, quantity: 2 },
+        ],
+      })
+      .expect(409)
+
+    expect(problem(response)).toMatchObject({
+      status: 409,
+      code: 'INSUFFICIENT_STOCK',
+      instance: '/api/machine/purchase',
+    })
+
+    const state = (await context.http().get('/api/machine').expect(200)).body as {
+      credit: number
+      products: { id: number; stock: number; unitsSold: number }[]
+    }
+    expect(state.credit).toBe(3)
+    expect(state.products[0]).toMatchObject({ id: 1, stock: 3, unitsSold: 0 })
+  })
+
   it('rejects a purchase the credit does not cover with 409 INSUFFICIENT_CREDIT', async () => {
     const response = await context
       .http()
